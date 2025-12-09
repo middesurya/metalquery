@@ -1,0 +1,403 @@
+import React, { useState, useRef, useEffect } from 'react';
+import './App.css';
+
+const NLP_API_URL = process.env.REACT_APP_NLP_API_URL || 'http://localhost:8001';
+
+/**
+ * Format number with commas and units
+ */
+const formatValue = (value, key) => {
+    if (value === null || value === undefined) return '-';
+
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return value;
+
+    // Add units based on column name
+    if (key?.includes('strength') || key?.includes('modulus')) {
+        return `${numValue.toLocaleString()} MPa`;
+    }
+    if (key?.includes('density')) {
+        return `${numValue.toLocaleString()} kg/m³`;
+    }
+    if (key?.includes('hardness') || key === 'bhn' || key === 'hv') {
+        return numValue.toLocaleString();
+    }
+    if (key?.includes('ratio')) {
+        return numValue.toFixed(3);
+    }
+
+    return typeof value === 'number' ? numValue.toLocaleString() : value;
+};
+
+/**
+ * Results Table Component
+ */
+const ResultsTable = ({ results }) => {
+    if (!results || results.length === 0) return null;
+
+    const columns = Object.keys(results[0]);
+
+    return (
+        <div className="results-section">
+            <div className="results-header">
+                <span className="results-icon">📊</span>
+                <span>Data Results ({results.length} rows)</span>
+            </div>
+            <div className="results-table-container">
+                <table className="results-table">
+                    <thead>
+                        <tr>
+                            {columns.map(col => (
+                                <th key={col}>{col.replace(/_/g, ' ')}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {results.map((row, idx) => (
+                            <tr key={idx}>
+                                {columns.map(col => (
+                                    <td key={col}>{formatValue(row[col], col)}</td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * SQL Display Component
+ */
+const SQLDisplay = ({ sql }) => {
+    const [copied, setCopied] = useState(false);
+
+    const copySQL = () => {
+        navigator.clipboard.writeText(sql);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="sql-section">
+            <div className="sql-header">
+                <span className="sql-icon">🔍</span>
+                <span>Generated SQL Query</span>
+                <button className="copy-btn" onClick={copySQL}>
+                    {copied ? '✓ Copied' : '📋 Copy'}
+                </button>
+            </div>
+            <pre className="sql-code">{sql}</pre>
+        </div>
+    );
+};
+
+/**
+ * Chat Message Component
+ */
+const ChatMessage = ({ message, isUser }) => {
+    return (
+        <div className={`message ${isUser ? 'user-message' : 'bot-message'}`}>
+            {!isUser && (
+                <div className="message-avatar">
+                    <span>🔩</span>
+                </div>
+            )}
+            <div className="message-content">
+                <div className="message-text">{message.text}</div>
+
+                {message.results && message.results.length > 0 && (
+                    <ResultsTable results={message.results} />
+                )}
+
+                {message.sql && (
+                    <SQLDisplay sql={message.sql} />
+                )}
+
+                <div className="message-time">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                </div>
+            </div>
+            {isUser && (
+                <div className="message-avatar user-avatar">
+                    <span>👤</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/**
+ * Typing Indicator
+ */
+const TypingIndicator = () => (
+    <div className="message bot-message">
+        <div className="message-avatar">
+            <span>🔩</span>
+        </div>
+        <div className="message-content">
+            <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </div>
+);
+
+/**
+ * Suggestion Chip Component
+ */
+const SuggestionChip = ({ text, onClick }) => (
+    <button className="suggestion-chip" onClick={() => onClick(text)}>
+        {text}
+    </button>
+);
+
+/**
+ * Main App Component
+ */
+function App() {
+    const [messages, setMessages] = useState([
+        {
+            id: 1,
+            text: "Welcome to the Metallurgy Materials Database! I can help you find information about materials, their properties, and specifications. What would you like to know?",
+            isUser: false,
+            timestamp: new Date().toISOString()
+        }
+    ]);
+    const [inputValue, setInputValue] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const suggestions = [
+        "What steel has the highest tensile strength?",
+        "Show aluminum alloys with yield strength > 300 MPa",
+        "Compare properties of SAE 4140 steel",
+        "Find lightweight materials with high strength",
+        "List all stainless steels",
+        "What are the hardest materials?"
+    ];
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
+
+    const sendMessage = async (text = inputValue) => {
+        if (!text.trim() || isLoading) return;
+
+        const userMessage = {
+            id: Date.now(),
+            text: text,
+            isUser: true,
+            timestamp: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        setInputValue('');
+        setIsLoading(true);
+
+        try {
+            const response = await fetch(`${NLP_API_URL}/api/v1/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: text })
+            });
+
+            const data = await response.json();
+
+            const botMessage = {
+                id: Date.now() + 1,
+                text: data.success
+                    ? data.response
+                    : `Sorry, I couldn't process that: ${data.error}`,
+                isUser: false,
+                sql: data.sql,
+                results: data.results,
+                row_count: data.row_count,
+                timestamp: new Date().toISOString()
+            };
+
+            setMessages(prev => [...prev, botMessage]);
+        } catch (error) {
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: `Connection error: ${error.message}. Please check if the server is running.`,
+                isUser: false,
+                timestamp: new Date().toISOString()
+            }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
+
+    const handleSuggestionClick = (suggestion) => {
+        sendMessage(suggestion);
+    };
+
+    const clearChat = () => {
+        setMessages([{
+            id: Date.now(),
+            text: "Chat cleared. How can I help you explore the metallurgy database?",
+            isUser: false,
+            timestamp: new Date().toISOString()
+        }]);
+    };
+
+    return (
+        <div className="app">
+            {/* Sidebar */}
+            <aside className="sidebar">
+                <div className="sidebar-header">
+                    <div className="logo">
+                        <span className="logo-icon">🔩</span>
+                        <div className="logo-text">
+                            <h1>MetalQuery</h1>
+                            <span>AI Materials Assistant</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="sidebar-content">
+                    <div className="sidebar-section">
+                        <h3>Quick Actions</h3>
+                        <button className="sidebar-btn" onClick={clearChat}>
+                            <span>🗑️</span> New Chat
+                        </button>
+                    </div>
+
+                    <div className="sidebar-section">
+                        <h3>Database Info</h3>
+                        <div className="info-card">
+                            <div className="info-item">
+                                <span className="info-value">827</span>
+                                <span className="info-label">Materials</span>
+                            </div>
+                            <div className="info-item">
+                                <span className="info-value">11</span>
+                                <span className="info-label">Categories</span>
+                            </div>
+                            <div className="info-item">
+                                <span className="info-value">34</span>
+                                <span className="info-label">Heat Treatments</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="sidebar-section">
+                        <h3>Properties Available</h3>
+                        <ul className="property-list">
+                            <li>Tensile Strength (MPa)</li>
+                            <li>Yield Strength (MPa)</li>
+                            <li>Elastic Modulus (MPa)</li>
+                            <li>Density (kg/m³)</li>
+                            <li>Hardness (Bhn/HV)</li>
+                            <li>Poisson's Ratio</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div className="sidebar-footer">
+                    <div className="status-indicator">
+                        <span className="status-dot online"></span>
+                        <span>Connected</span>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Main Chat Area */}
+            <main className="main-content">
+                {/* Chat Header */}
+                <header className="chat-header">
+                    <div className="header-left">
+                        <h2>Metallurgy Assistant</h2>
+                        <p>Ask questions in natural language about materials and properties</p>
+                    </div>
+                    <div className="header-right">
+                        <span className="badge">GPT-4 Powered</span>
+                    </div>
+                </header>
+
+                {/* Messages Area */}
+                <div className="messages-container">
+                    <div className="messages-wrapper">
+                        {messages.map(msg => (
+                            <ChatMessage
+                                key={msg.id}
+                                message={msg}
+                                isUser={msg.isUser}
+                            />
+                        ))}
+                        {isLoading && <TypingIndicator />}
+                        <div ref={messagesEndRef} />
+                    </div>
+                </div>
+
+                {/* Suggestions */}
+                {messages.length <= 1 && (
+                    <div className="suggestions-container">
+                        <p className="suggestions-title">Try asking:</p>
+                        <div className="suggestions-grid">
+                            {suggestions.map((suggestion, idx) => (
+                                <SuggestionChip
+                                    key={idx}
+                                    text={suggestion}
+                                    onClick={handleSuggestionClick}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Input Area */}
+                <div className="input-container">
+                    <div className="input-wrapper">
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Ask about materials, properties, or specifications..."
+                            disabled={isLoading}
+                            className="chat-input"
+                        />
+                        <button
+                            onClick={() => sendMessage()}
+                            disabled={!inputValue.trim() || isLoading}
+                            className="send-button"
+                        >
+                            {isLoading ? (
+                                <span className="loading-spinner"></span>
+                            ) : (
+                                <span>Send</span>
+                            )}
+                        </button>
+                    </div>
+                    <p className="input-hint">
+                        Press Enter to send • Results limited to 50 rows
+                    </p>
+                </div>
+            </main>
+        </div>
+    );
+}
+
+export default App;
