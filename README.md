@@ -2,16 +2,42 @@
 
 🔩 **MetalQuery** is a production-ready Natural Language to SQL chatbot that allows you to query a metallurgy materials database using plain English.
 
-![MetalQuery Demo](https://img.shields.io/badge/AI-GPT--4-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
+![MetalQuery Demo](https://img.shields.io/badge/AI-GPT--4-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/NLP-FastAPI-009688) ![Django](https://img.shields.io/badge/Backend-Django-092E20)
+
+## 🏗️ Production Architecture
+
+```
+                         SECURITY BOUNDARY
+                         AI never touches DB
+                                ↓
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌──────────────┐
+│ React Frontend  │────▶│  Django Backend │────▶│ NLP Microservice│────▶│ LLM Provider │
+│   (Port 3000)   │     │   (Port 8000)   │     │   (Port 8001)   │     │   (OpenAI)   │
+└─────────────────┘     └────────┬────────┘     └─────────────────┘     └──────────────┘
+                                 │
+                                 ▼ Django ORM / Safe SQL
+                        ┌─────────────────┐
+                        │   PostgreSQL    │
+                        │    Database     │
+                        └─────────────────┘
+```
+
+### Key Security Principles:
+- **AI Never Touches Database** - NLP service ONLY generates SQL
+- **Django Owns the Database** - All queries go through Django
+- **Defense in Depth** - SQL validated at both NLP and Django layers
+- **Rate Limiting** - Prevents abuse (30 requests/minute per IP)
+- **Audit Logging** - All queries logged for compliance
 
 ## ✨ Features
 
 - 🤖 **Natural Language Queries** - Ask questions in plain English
-- 🔒 **Secure SQL Generation** - Guardrails prevent SQL injection and data modification
+- 🔒 **Multi-Layer Security** - AI isolation, SQL validation, rate limiting
 - 📊 **Rich Data Display** - Beautiful tables with formatted values and units
 - 🔍 **Query Transparency** - View generated SQL with copy functionality
 - ⚡ **Real-time Results** - Instant query execution and response
 - 🎨 **Production-Ready UI** - Modern, responsive dark-themed interface
+- 📝 **Audit Trail** - Full logging for compliance
 
 ## 📊 Database Content
 
@@ -45,7 +71,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/metalquery.git
+   git clone https://github.com/middesurya/metalquery.git
    cd metalquery
    ```
 
@@ -55,7 +81,7 @@
    # Edit .env with your credentials
    ```
 
-3. **Set up the backend**
+3. **Set up the NLP Service (Port 8001)**
    ```bash
    cd nlp_service
    python -m venv venv
@@ -72,18 +98,31 @@
 5. **Start the NLP service**
    ```bash
    python main.py
+   # Runs on http://localhost:8001
    ```
 
-6. **Set up the frontend** (in a new terminal)
+6. **Set up the Django Backend (Port 8000)** (new terminal)
+   ```bash
+   cd backend
+   python -m venv venv
+   .\venv\Scripts\activate
+   pip install -r requirements.txt
+   python manage.py runserver
+   # Runs on http://localhost:8000
+   ```
+
+7. **Set up the React Frontend (Port 3000)** (new terminal)
    ```bash
    cd frontend
    npm install
    npm start
+   # Runs on http://localhost:3000
    ```
 
-7. **Open the application**
+8. **Open the application**
    - Frontend: http://localhost:3000
-   - API Docs: http://localhost:8001/docs
+   - Django API: http://localhost:8000/api/chatbot/
+   - NLP API Docs: http://localhost:8001/docs
 
 ## 💡 Example Queries
 
@@ -96,58 +135,70 @@
 | "List all stainless steels" | Category browsing |
 | "What are the hardest materials?" | Sort by property |
 
-## 🏗️ Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   React Frontend │────▶│   FastAPI NLP   │────▶│   PostgreSQL    │
-│   (Port 3000)    │◀────│  Service (8001) │◀────│   Database      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌─────────────────┐
-                        │   OpenAI GPT-4  │
-                        │   (SQL Gen)     │
-                        └─────────────────┘
-```
-
 ## 🔒 Security Features
 
+### Multi-Layer Architecture
+| Layer | Security Function |
+|-------|-------------------|
+| **React Frontend** | User interface only |
+| **Django Backend** | Rate limiting, SQL validation, DB access |
+| **NLP Service** | SQL generation, initial validation |
+| **Database** | Query timeout, connection limits |
+
+### Implemented Protections
 - ✅ **Read-only queries** - Only SELECT statements allowed
 - ✅ **SQL injection prevention** - Multi-layer validation
 - ✅ **Table restrictions** - Only allowed tables can be queried
-- ✅ **Query limits** - Results capped at 100 rows by default
-- ✅ **No system table access** - pg_* and information_schema blocked
+- ✅ **Query limits** - Results capped at 100 rows
+- ✅ **Rate limiting** - 30 requests/minute per IP
+- ✅ **Audit logging** - All queries logged
+- ✅ **Statement timeout** - 10 second max execution
+- ✅ **AI isolation** - AI never touches database
 
 ## 📁 Project Structure
 
 ```
 metalquery/
-├── nlp_service/           # Backend NLP service
-│   ├── main.py            # FastAPI application
-│   ├── config.py          # Configuration settings
-│   ├── guardrails.py      # SQL security validation
-│   ├── schema_loader.py   # Database schema introspection
-│   ├── prompts.py         # LLM prompts for metallurgy
-│   ├── import_metallurgy_data.py  # Data import script
+├── backend/               # Django backend (DB owner)
+│   ├── chatbot/
+│   │   ├── views.py       # Main chat endpoint with security
+│   │   └── urls.py        # URL routing
+│   ├── config/
+│   │   └── settings.py    # Django settings
 │   └── requirements.txt   # Python dependencies
+│
+├── nlp_service/           # NLP microservice (SQL generation only)
+│   ├── main.py            # FastAPI application
+│   ├── guardrails.py      # SQL validation
+│   ├── schema_loader.py   # Schema introspection
+│   ├── prompts.py         # LLM prompts
+│   └── requirements.txt   # Python dependencies
+│
 ├── frontend/              # React frontend
 │   ├── src/
 │   │   ├── App.jsx        # Main application
 │   │   └── App.css        # Styles
 │   └── package.json       # Node dependencies
+│
 ├── .env.example           # Environment template
 └── README.md              # This file
 ```
 
 ## 🛠️ API Endpoints
 
+### Django Backend (Port 8000)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/chat` | POST | Complete chat flow with SQL execution |
-| `/api/v1/generate-sql` | POST | Generate SQL from question |
-| `/api/v1/format-response` | POST | Format results in natural language |
-| `/api/v1/schema` | GET | Get database schema info |
+| `/api/chatbot/chat/` | POST | Main chat endpoint |
+| `/api/chatbot/schema/` | GET | Get database schema |
+| `/api/chatbot/health/` | GET | Health check |
+
+### NLP Service (Port 8001) - Internal Use
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/generate-sql` | POST | Generate SQL (no execution) |
+| `/api/v1/format-response` | POST | Format results to NL |
+| `/api/v1/schema` | GET | Schema info |
 | `/health` | GET | Health check |
 
 ## 📄 License

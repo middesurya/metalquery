@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
-const NLP_API_URL = process.env.REACT_APP_NLP_API_URL || 'http://localhost:8001';
+// Django Backend API URL (React → Django → NLP → LLM)
+// Security: React calls Django, which owns the database
+// AI service never touches the database directly
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 /**
  * Format number with commas and units
@@ -208,7 +211,8 @@ function App() {
         setIsLoading(true);
 
         try {
-            const response = await fetch(`${NLP_API_URL}/api/v1/chat`, {
+            // Call Django backend (which calls NLP service internally)
+            const response = await fetch(`${API_URL}/api/chatbot/chat/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question: text })

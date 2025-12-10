@@ -1,6 +1,10 @@
 """
 NLP Service - Main FastAPI Application
 Provides endpoints for Natural Language to SQL conversion.
+
+SECURITY NOTE: This service ONLY generates SQL and formats responses.
+It does NOT connect to or execute queries against the database.
+Database access is handled by the Django backend (security boundary).
 """
 import os
 import sys
@@ -18,7 +22,7 @@ from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
 from config import settings
-from guardrails import SQLGuardrails, validate_sql
+from guardrails import SQLGuardrails
 from schema_loader import SchemaLoader
 from prompts import get_sql_generation_prompt, RESPONSE_FORMAT_PROMPT
 
@@ -29,16 +33,23 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="NLP-to-SQL Service",
-    description="Converts natural language queries to safe SQL statements",
-    version="1.0.0"
+    description="""
+    Converts natural language queries to safe SQL statements.
+    
+    **Security Architecture:**
+    - This service ONLY generates SQL - it does NOT execute queries
+    - Database access is handled by the Django backend (security boundary)
+    - AI is isolated from the database
+    """,
+    version="2.0.0"
 )
 
-# Add CORS middleware for frontend access
+# Add CORS middleware - in production, restrict to Django backend only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=["http://localhost:8000", "http://localhost:3000"],  # Django + React
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
 
@@ -47,7 +58,10 @@ schema_loader = SchemaLoader()
 guardrails = SQLGuardrails()
 
 
+# ============================================================
 # Request/Response Models
+# ============================================================
+
 class GenerateSQLRequest(BaseModel):
     """Request model for SQL generation."""
     question: str
@@ -60,6 +74,7 @@ class GenerateSQLResponse(BaseModel):
     sql: Optional[str] = None
     error: Optional[str] = None
     tables_used: Optional[List[str]] = None
+    explanation: Optional[str] = None  # Brief explanation of the query
 
 
 class FormatResponseRequest(BaseModel):
@@ -82,7 +97,10 @@ class SchemaInfoResponse(BaseModel):
     schema_context: str
 
 
-# Initialize LLM
+# ============================================================
+# LLM Configuration
+# ============================================================
+
 def get_llm():
     """Get configured LLM instance."""
     return ChatOpenAI(
@@ -92,10 +110,16 @@ def get_llm():
     )
 
 
+# ============================================================
+# Startup Events
+# ============================================================
+
 @app.on_event("startup")
 async def startup_event():
     """Load schema on startup."""
-    logger.info("Starting NLP-to-SQL Service...")
+    logger.info("Starting NLP-to-SQL Service (SQL Generation Only)...")
+    logger.info("NOTE: This service does NOT connect to the database for queries.")
+    logger.info("Database access is handled by the Django backend.")
     try:
         schema_loader.load_schema()
         logger.info(f"Loaded schema for tables: {schema_loader.get_table_names()}")
@@ -104,10 +128,20 @@ async def startup_event():
         logger.info("Schema will be loaded on first request")
 
 
+# ============================================================
+# Health & Schema Endpoints
+# ============================================================
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "nlp-to-sql"}
+    return {
+        "status": "healthy",
+        "service": "nlp-to-sql",
+        "version": "2.0.0",
+        "mode": "sql-generation-only",
+        "note": "This service generates SQL but does NOT execute queries"
+    }
 
 
 @app.get("/api/v1/schema", response_model=SchemaInfoResponse)
@@ -126,6 +160,26 @@ async def get_schema():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/reload-schema")
+async def reload_schema(tables: Optional[List[str]] = None):
+    """Reload database schema (useful after schema changes)."""
+    try:
+        schema_loader._schema_cache.clear()
+        schema_loader._allowed_tables.clear()
+        schema_loader.load_schema(tables=tables)
+        return {
+            "success": True,
+            "tables": schema_loader.get_table_names()
+        }
+    except Exception as e:
+        logger.error(f"Error reloading schema: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# SQL Generation Endpoint (Core Functionality)
+# ============================================================
+
 @app.post("/api/v1/generate-sql", response_model=GenerateSQLResponse)
 async def generate_sql(request: GenerateSQLRequest):
     """
@@ -133,6 +187,9 @@ async def generate_sql(request: GenerateSQLRequest):
     
     This is the main endpoint that converts user questions to SQL.
     The generated SQL is validated by guardrails before returning.
+    
+    NOTE: This endpoint does NOT execute the SQL.
+    SQL execution is handled by the Django backend.
     """
     logger.info(f"Generating SQL for question: {request.question}")
     
@@ -186,7 +243,8 @@ async def generate_sql(request: GenerateSQLRequest):
         return GenerateSQLResponse(
             success=True,
             sql=generated_sql,
-            tables_used=tables_used
+            tables_used=tables_used,
+            explanation=f"Query to answer: {request.question}"
         )
         
     except Exception as e:
@@ -197,6 +255,10 @@ async def generate_sql(request: GenerateSQLRequest):
         )
 
 
+# ============================================================
+# Response Formatting Endpoint
+# ============================================================
+
 @app.post("/api/v1/format-response", response_model=FormatResponseResponse)
 async def format_response(request: FormatResponseRequest):
     """
@@ -204,6 +266,9 @@ async def format_response(request: FormatResponseRequest):
     
     Takes the original question, executed SQL, and results,
     then generates a human-friendly response.
+    
+    NOTE: This receives results from Django backend - 
+    this service does NOT query the database.
     """
     logger.info(f"Formatting response for question: {request.question}")
     
@@ -237,158 +302,21 @@ async def format_response(request: FormatResponseRequest):
         )
 
 
-@app.post("/api/v1/reload-schema")
-async def reload_schema(tables: Optional[List[str]] = None):
-    """Reload database schema (useful after schema changes)."""
-    try:
-        schema_loader._schema_cache.clear()
-        schema_loader._allowed_tables.clear()
-        schema_loader.load_schema(tables=tables)
-        return {
-            "success": True,
-            "tables": schema_loader.get_table_names()
-        }
-    except Exception as e:
-        logger.error(f"Error reloading schema: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class ChatRequest(BaseModel):
-    """Request model for complete chat flow."""
-    question: str
-
-
-class ChatResponse(BaseModel):
-    """Response model for complete chat flow."""
-    success: bool
-    response: Optional[str] = None
-    sql: Optional[str] = None
-    results: Optional[List[Dict[str, Any]]] = None
-    row_count: Optional[int] = None
-    error: Optional[str] = None
-
-
-def execute_sql_query(sql: str) -> List[Dict[str, Any]]:
-    """Execute SQL query and return results as list of dicts."""
-    import psycopg2
-    import psycopg2.extras
-    
-    conn = psycopg2.connect(
-        host=settings.db_host,
-        port=settings.db_port,
-        dbname=settings.db_name,
-        user=settings.db_user,
-        password=settings.db_password
-    )
-    
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql)
-            results = cur.fetchall()
-            # Convert RealDictRow to regular dict
-            return [dict(row) for row in results]
-    finally:
-        conn.close()
-
-
-@app.post("/api/v1/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """
-    Complete chat endpoint that:
-    1. Generates SQL from natural language
-    2. Executes the query
-    3. Returns formatted natural language response
-    """
-    logger.info(f"Chat request: {request.question}")
-    
-    try:
-        # Step 1: Load schema if not already loaded
-        if not schema_loader.get_table_names():
-            schema_loader.load_schema()
-        
-        # Step 2: Get schema context for the prompt
-        schema_context = schema_loader.get_schema_context()
-        
-        # Step 3: Build system prompt with schema
-        system_prompt = get_sql_generation_prompt(schema_context)
-        
-        # Step 4: Initialize LLM and generate SQL
-        llm = get_llm()
-        
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=request.question)
-        ]
-        
-        response = llm.invoke(messages)
-        generated_sql = response.content.strip()
-        
-        # Clean up SQL (remove markdown code blocks if present)
-        if generated_sql.startswith("```"):
-            lines = generated_sql.split("\n")
-            generated_sql = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-        generated_sql = generated_sql.strip()
-        
-        logger.info(f"Generated SQL: {generated_sql}")
-        
-        # Step 5: Validate SQL against guardrails
-        guardrails.allowed_tables = schema_loader.allowed_tables
-        is_valid, error_message = guardrails.validate(generated_sql)
-        
-        if not is_valid:
-            logger.warning(f"SQL validation failed: {error_message}")
-            return ChatResponse(
-                success=False,
-                error=f"Query validation failed: {error_message}",
-                sql=generated_sql
-            )
-        
-        # Step 6: Execute the SQL query
-        try:
-            results = execute_sql_query(generated_sql)
-            row_count = len(results)
-            logger.info(f"Query returned {row_count} rows")
-        except Exception as db_error:
-            logger.error(f"Database error: {db_error}")
-            return ChatResponse(
-                success=False,
-                error=f"Database query error: {str(db_error)}",
-                sql=generated_sql
-            )
-        
-        # Step 7: Format the response using LLM
-        results_str = str(results[:20])  # Limit to first 20 rows for formatting
-        if len(results) > 20:
-            results_str += f"\n... and {len(results) - 20} more rows"
-        
-        format_prompt = RESPONSE_FORMAT_PROMPT.format(
-            question=request.question,
-            sql=generated_sql,
-            results=results_str
-        )
-        
-        format_messages = [HumanMessage(content=format_prompt)]
-        format_response = llm.invoke(format_messages)
-        formatted_answer = format_response.content.strip()
-        
-        return ChatResponse(
-            success=True,
-            response=formatted_answer,
-            sql=generated_sql,
-            results=results[:50],  # Limit results to 50 rows
-            row_count=row_count
-        )
-        
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        return ChatResponse(
-            success=False,
-            error=f"Failed to process question: {str(e)}"
-        )
-
+# ============================================================
+# Main Entry Point
+# ============================================================
 
 if __name__ == "__main__":
     import uvicorn
+    
+    print("\n" + "=" * 60)
+    print("NLP-to-SQL Service v2.0.0")
+    print("=" * 60)
+    print("Mode: SQL Generation Only")
+    print("This service generates SQL but does NOT execute queries.")
+    print("Database access is handled by the Django backend.")
+    print("=" * 60 + "\n")
+    
     uvicorn.run(
         "main:app",
         host=settings.nlp_service_host,
