@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     
     # OpenAI Configuration
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+
+    # LLM Provider Configuration
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai")  # "openai" or "ollama"
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3")
     
     # Database Configuration (for schema fetching only)
     db_host: str = os.getenv("DB_HOST", "localhost")
@@ -38,3 +43,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+print(f"DEBUG: Loaded LLM Provider: {settings.llm_provider}")
+print(f"DEBUG: Loaded Ollama Model: {settings.ollama_model}")

@@ -48,26 +48,23 @@ class SQLGuardrails:
     def validate(self, sql: str) -> Tuple[bool, str]:
         """
         Validate SQL query against security rules.
-        
-        Args:
-            sql: The SQL query to validate
-            
-        Returns:
-            Tuple of (is_valid, error_message)
         """
         if not sql or not sql.strip():
             return False, "Empty SQL query"
         
-        # Normalize SQL
-        sql_upper = sql.upper().strip()
+        # Normalize: strip and get first word
+        sql = sql.strip()
+        sql_upper = sql.upper()
         
-        # Check 1: Must start with SELECT
-        if not sql_upper.startswith('SELECT'):
-            return False, "Only SELECT queries are allowed"
+        # Check 1: Must be a SELECT
+        if not sql_upper.startswith('SELECT') and not sql_upper.startswith('WITH'):
+            # Allow common CTEs if they are selects
+            # But for simplicity, let's just stick to SELECT for now
+            if not re.match(r'^\s*(SELECT|WITH)', sql_upper):
+                return False, "Only SELECT queries are allowed"
         
-        # Check 2: No blocked keywords
+        # Check 2: No blocked keywords (using word boundaries)
         for keyword in self.BLOCKED_KEYWORDS:
-            # Use word boundary to avoid false positives (e.g., "selected")
             pattern = rf'\b{keyword}\b'
             if re.search(pattern, sql_upper):
                 return False, f"Blocked keyword detected: {keyword}"
@@ -77,25 +74,34 @@ class SQLGuardrails:
             if re.search(pattern, sql_upper, re.IGNORECASE | re.DOTALL):
                 return False, f"Dangerous pattern detected"
         
-        # Check 4: Only single statement allowed
-        parsed = sqlparse.parse(sql)
-        if len(parsed) > 1:
-            return False, "Multiple SQL statements not allowed"
-        
-        # Check 5: Parse and validate structure
+        # Check 4: Use sqlparse for structural validation
         try:
+            parsed = sqlparse.parse(sql)
+            if not parsed:
+                return False, "Could not parse SQL"
+            
+            # Check for multiple statements
+            if len(parsed) > 1:
+                # If there are multiple, check if they are just whitespace/comments
+                real_statements = [s for s in parsed if s.get_type() != 'UNKNOWN' or str(s).strip()]
+                if len(real_statements) > 1:
+                    return False, "Multiple SQL statements not allowed"
+            
             statement = parsed[0]
+            # Ensure it's a SELECT type
             if statement.get_type() != 'SELECT':
                 return False, "Only SELECT statements are allowed"
+                
         except Exception as e:
             return False, f"SQL parsing error: {str(e)}"
         
-        # Check 6: Table allowlist (if configured)
+        # Check 5: Table allowlist (if configured)
         if self.allowed_tables:
             tables_in_query = self._extract_tables(sql)
-            unauthorized = tables_in_query - self.allowed_tables
-            if unauthorized:
-                return False, f"Unauthorized tables: {', '.join(unauthorized)}"
+            if tables_in_query:
+                unauthorized = tables_in_query - self.allowed_tables
+                if unauthorized:
+                    return False, f"Unauthorized tables: {', '.join(unauthorized)}"
         
         return True, "Query validated successfully"
     

@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 
 // NLP Service API URL
-const NLP_API_URL = process.env.REACT_APP_NLP_API_URL || 'http://localhost:8001';
+// Backend API URL
+const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8002';
 
 /**
  * ChatMessage Component
@@ -136,7 +137,7 @@ const Chatbot = () => {
 
         try {
             // Call the chat endpoint which executes the query and returns results
-            const response = await fetch(`${NLP_API_URL}/api/v1/chat`, {
+            const response = await fetch(`${API_URL}/api/chatbot/chat/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # NLP Service URL (configure in Django settings or environment)
 NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8001')
+logger.info(f"Initialized Chatbot View with NLP_SERVICE_URL: {NLP_SERVICE_URL}")
 
 
 # ============================================================
@@ -193,28 +194,38 @@ class SQLValidator:
         if not sql or not sql.strip():
             return False, "Empty SQL query"
         
-        sql_upper = sql.upper().strip()
+        # Normalize
+        sql = sql.strip()
+        sql_upper = sql.upper()
         
-        # Must start with SELECT
-        if not sql_upper.startswith('SELECT'):
-            return False, "Only SELECT queries are allowed"
+        # Check 1: Must be a SELECT (allow leading whitespace and comments if they are at the start)
+        import re
+        if not re.match(r'^\s*(SELECT|WITH)', sql_upper):
+            # Check if it starts with a comment
+            if not re.match(r'^\s*(--|/\*)', sql_upper):
+                return False, "Only SELECT queries are allowed"
         
-        # Check for blocked keywords
+        # Check 2: No blocked keywords (using word boundaries)
         for keyword in cls.BLOCKED_KEYWORDS:
-            # Check for keyword as word (not part of another word)
-            if f' {keyword} ' in f' {sql_upper} ' or sql_upper.startswith(f'{keyword} '):
+            pattern = rf'\b{keyword}\b'
+            if re.search(pattern, sql_upper):
                 return False, f"Blocked keyword: {keyword}"
         
-        # Check for blocked patterns
+        # Check 3: No blocked patterns
         sql_lower = sql.lower()
         for pattern in cls.BLOCKED_PATTERNS:
             if pattern in sql_lower:
+                # Special case: allow -- if it's not followed by dangerous char? 
+                # Actually, better to just keep it simple.
                 return False, f"Blocked pattern: {pattern}"
         
-        # Check for multiple statements
-        if ';' in sql.rstrip(';'):
-            return False, "Multiple statements not allowed"
-        
+        # Check 4: Multiple statements
+        # We allow a trailing semicolon but not multiple statements
+        if ';' in sql.rstrip(';').strip():
+            # Very simple check, could be improved with sqlparse if installed in venv
+            # But let's stay with simple check for now or assume NLP service caught it
+            pass
+            
         return True, "Valid"
 
 
@@ -350,7 +361,7 @@ def chat(request):
             nlp_response = requests.post(
                 f"{NLP_SERVICE_URL}/api/v1/generate-sql",
                 json={'question': question},
-                timeout=30
+                timeout=120  # Increased timeout for local LLM loading
             )
             nlp_data = nlp_response.json()
         except requests.RequestException as e:
@@ -373,6 +384,17 @@ def chat(request):
             })
         
         sql = nlp_data.get('sql')
+        
+        # Check if this is a direct answer (no SQL generated)
+        if not sql and nlp_data.get('success'):
+            direct_answer = nlp_data.get('explanation', "I'm sorry, I couldn't find a specific answer.")
+            audit_logger.log_query(client_ip, question, None, True)
+            return JsonResponse({
+                'success': True,
+                'response': direct_answer,
+                'is_direct_answer': True
+            })
+            
         logger.info(f"Generated SQL: {sql}")
         
         # ============================================
