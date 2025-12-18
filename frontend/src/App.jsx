@@ -4,7 +4,7 @@ import './App.css';
 // Django Backend API URL (React → Django → NLP → LLM)
 // Security: React calls Django, which owns the database
 // AI service never touches the database directly
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8002';
 
 /**
  * Format number with commas and units
@@ -165,7 +165,7 @@ function App() {
     const [messages, setMessages] = useState([
         {
             id: 1,
-            text: "Welcome to the Metallurgy Materials Database! I can help you find information about materials, their properties, and specifications. What would you like to know?",
+            text: "Welcome to the ProcessQuery Manufacturing Assistant! I can help you explore production data, tap logs, and quality analysis results. What would you like to know?",
             isUser: false,
             timestamp: new Date().toISOString()
         }
@@ -176,12 +176,12 @@ function App() {
     const inputRef = useRef(null);
 
     const suggestions = [
-        "What steel has the highest tensile strength?",
-        "Show aluminum alloys with yield strength > 300 MPa",
-        "Compare properties of SAE 4140 steel",
-        "Find lightweight materials with high strength",
-        "List all stainless steels",
-        "What are the hardest materials?"
+        "How many process taps are there?",
+        "List logs for tap hole status",
+        "Show latest analysis results",
+        "What are the active furnace tap holes?",
+        "Count clinker images by video",
+        "Show additive costs and weights"
     ];
 
     const scrollToBottom = () => {
@@ -259,7 +259,7 @@ function App() {
     const clearChat = () => {
         setMessages([{
             id: Date.now(),
-            text: "Chat cleared. How can I help you explore the metallurgy database?",
+            text: "Chat cleared. How can I help you explore the manufacturing database?",
             isUser: false,
             timestamp: new Date().toISOString()
         }]);
@@ -271,10 +271,10 @@ function App() {
             <aside className="sidebar">
                 <div className="sidebar-header">
                     <div className="logo">
-                        <span className="logo-icon">🔩</span>
+                        <span className="logo-icon">🏭</span>
                         <div className="logo-text">
-                            <h1>MetalQuery</h1>
-                            <span>AI Materials Assistant</span>
+                            <h1>ProcessQuery</h1>
+                            <span>Manufacturing Assistant</span>
                         </div>
                     </div>
                 </div>
@@ -291,29 +291,25 @@ function App() {
                         <h3>Database Info</h3>
                         <div className="info-card">
                             <div className="info-item">
-                                <span className="info-value">827</span>
-                                <span className="info-label">Materials</span>
+                                <span className="info-value">150+</span>
+                                <span className="info-label">Tables</span>
                             </div>
                             <div className="info-item">
-                                <span className="info-value">11</span>
-                                <span className="info-label">Categories</span>
-                            </div>
-                            <div className="info-item">
-                                <span className="info-value">34</span>
-                                <span className="info-label">Heat Treatments</span>
+                                <span className="info-value">Active</span>
+                                <span className="info-label">Monitoring</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="sidebar-section">
-                        <h3>Properties Available</h3>
+                        <h3>Data Domains</h3>
                         <ul className="property-list">
-                            <li>Tensile Strength (MPa)</li>
-                            <li>Yield Strength (MPa)</li>
-                            <li>Elastic Modulus (MPa)</li>
-                            <li>Density (kg/m³)</li>
-                            <li>Hardness (Bhn/HV)</li>
-                            <li>Poisson's Ratio</li>
+                            <li>Process Taps</li>
+                            <li>Additive Info</li>
+                            <li>Analysis Results</li>
+                            <li>Clinker Imaging</li>
+                            <li>Audio Analysis</li>
+                            <li>Production Data</li>
                         </ul>
                     </div>
                 </div>
@@ -331,11 +327,11 @@ function App() {
                 {/* Chat Header */}
                 <header className="chat-header">
                     <div className="header-left">
-                        <h2>Metallurgy Assistant</h2>
-                        <p>Ask questions in natural language about materials and properties</p>
+                        <h2>Manufacturing Assistant</h2>
+                        <p>Ask questions in natural language about production, analysis, and process data</p>
                     </div>
                     <div className="header-right">
-                        <span className="badge">GPT-4 Powered</span>
+                        <span className="badge">AI Powered</span>
                     </div>
                 </header>
 
@@ -379,7 +375,7 @@ function App() {
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ask about materials, properties, or specifications..."
+                            placeholder="Ask about production, taps, or analysis data..."
                             disabled={isLoading}
                             className="chat-input"
                         />

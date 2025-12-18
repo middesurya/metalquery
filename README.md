@@ -81,34 +81,37 @@
    # Edit .env with your credentials
    ```
 
-3. **Set up the NLP Service (Port 8001)**
+3. **Install and Run Ollama**
+   - Download Ollama from [ollama.com](https://ollama.com)
+   - Pull the model:
+     ```bash
+     ollama pull qwen2.5-coder:1.5b
+     ```
+
+4. **Set up the NLP Service (Port 8003)**
    ```bash
    cd nlp_service
    python -m venv venv
    .\venv\Scripts\activate  # Windows
    # source venv/bin/activate  # Linux/Mac
    pip install -r requirements.txt
-   ```
-
-4. **Import metallurgy data**
-   ```bash
-   python import_metallurgy_data.py --host localhost --port 5432 --dbname postgres --user postgres --password YOUR_PASSWORD
-   ```
-
-5. **Start the NLP service**
-   ```bash
    python main.py
-   # Runs on http://localhost:8001
+   # Runs on http://127.0.0.1:8003
    ```
 
-6. **Set up the Django Backend (Port 8000)** (new terminal)
+5. **Import metallurgy data**
+   ```bash
+   python import_metallurgy_data.py --host 127.0.0.1 --port 5433 --dbname postgres --user postgres --password YOUR_PASSWORD
+   ```
+
+6. **Set up the Django Backend (Port 8002)** (new terminal)
    ```bash
    cd backend
    python -m venv venv
    .\venv\Scripts\activate
    pip install -r requirements.txt
-   python manage.py runserver
-   # Runs on http://localhost:8000
+   python manage.py runserver 8002
+   # Runs on http://127.0.0.1:8002
    ```
 
 7. **Set up the React Frontend (Port 3000)** (new terminal)
@@ -121,8 +124,8 @@
 
 8. **Open the application**
    - Frontend: http://localhost:3000
-   - Django API: http://localhost:8000/api/chatbot/
-   - NLP API Docs: http://localhost:8001/docs
+   - Django API: http://127.0.0.1:8002/api/chatbot/
+   - NLP API Docs: http://127.0.0.1:8003/docs
 
 ## 💡 Example Queries
 

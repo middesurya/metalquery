@@ -1,3 +1,4 @@
+
 """
 NLP Service - Main FastAPI Application
 Provides endpoints for Natural Language to SQL conversion.
@@ -19,6 +20,7 @@ from typing import Optional, List, Dict, Any
 import logging
 
 from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOllama
 from langchain.schema import HumanMessage, SystemMessage
 
 from config import settings
@@ -103,6 +105,14 @@ class SchemaInfoResponse(BaseModel):
 
 def get_llm():
     """Get configured LLM instance."""
+    if settings.llm_provider == "ollama":
+        logger.info(f"Using Local LLM: {settings.ollama_model}")
+        return ChatOllama(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+            temperature=0
+        )
+    
     return ChatOpenAI(
         model="gpt-4o-mini",  # Cost-effective and capable
         temperature=0,  # Deterministic output for SQL
@@ -199,7 +209,8 @@ async def generate_sql(request: GenerateSQLRequest):
             schema_loader.load_schema(tables=request.tables)
         
         # Get schema context for the prompt
-        schema_context = schema_loader.get_schema_context(tables=request.tables)
+        requested_tables = request.tables if request.tables and len(request.tables) > 0 else None
+        schema_context = schema_loader.get_schema_context(tables=requested_tables)
         
         # Build system prompt with schema
         system_prompt = get_sql_generation_prompt(schema_context)
@@ -210,41 +221,85 @@ async def generate_sql(request: GenerateSQLRequest):
         # Generate SQL using LLM
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=request.question)
+            HumanMessage(content=f"Question: {request.question}\nOutput ONLY the SQL block or the direct answer.")
         ]
         
-        response = llm.invoke(messages)
-        generated_sql = response.content.strip()
+        logger.info(f"System Prompt Length: {len(system_prompt)} chars")
+        logger.info(f"Number of tables in context: {len(schema_loader.get_table_names())}")
         
-        # Clean up SQL (remove markdown code blocks if present)
-        if generated_sql.startswith("```"):
-            lines = generated_sql.split("\n")
-            generated_sql = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-        generated_sql = generated_sql.strip()
+        # Retry loop for self-correction
+        MAX_RETRIES = 3
+        current_try = 0
+        last_error = None
         
-        logger.info(f"Generated SQL: {generated_sql}")
+        while current_try < MAX_RETRIES:
+            current_try += 1
+            if current_try > 1:
+                logger.info(f"Self-correction attempt {current_try}...")
+            
+            response = llm.invoke(messages)
+            generated_content = response.content.strip()
+            
+            # Detect if it's SQL or a direct answer
+            is_sql = False
+            sql_query = None
+            direct_answer = None
+            
+            import re
+            sql_match = re.search(r'```(?:sql)?\s*(.*?)```', generated_content, re.DOTALL | re.IGNORECASE)
+            
+            if sql_match:
+                is_sql = True
+                sql_query = sql_match.group(1).strip().rstrip(';').strip()
+                logger.info(f"Detected SQL: {sql_query}")
+            else:
+                # If no SQL block, check if it's just raw SQL without blocks (e.g. starts with SELECT)
+                if re.match(r'^\s*SELECT\s', generated_content, re.IGNORECASE):
+                    is_sql = True
+                    sql_query = generated_content.rstrip(';').strip()
+                    logger.info("Detected raw SQL (no markdown block)")
+                else:
+                    is_sql = False
+                    direct_answer = generated_content
+                    logger.info("Detected direct text answer")
+            
+            # If it's SQL, run guardrails
+            if is_sql:
+                # Update guardrails with allowed tables
+                guardrails = SQLGuardrails(allowed_tables=set(schema_loader.get_table_names()))
+                is_valid, error_msg = guardrails.validate(sql_query)
+                
+                if is_valid:
+                    # Success! Return the valid SQL
+                    tables_used = list(guardrails._extract_tables(sql_query))
+                    return GenerateSQLResponse(
+                        success=True,
+                        sql=sql_query,
+                        tables_used=tables_used,
+                        explanation=f"Query to answer: {request.question}"
+                    )
+                else:
+                    # Validation failed - Feed back into LLM for correction
+                    logger.warning(f"SQL failed validation (Attempt {current_try}): {error_msg}")
+                    last_error = error_msg
+                    
+                    # Add error context to messages for next iteration
+                    messages.append(HumanMessage(content=f"The SQL you generated was invalid. Error: {error_msg}\nPlease correct the query and ensure you use ONLY tables from the provided schema."))
+                    continue
+            else:
+                # If it's a direct answer, return it immediately (no SQL validation needed)
+                return GenerateSQLResponse(
+                    success=True,
+                    sql=None,
+                    tables_used=[],
+                    explanation=direct_answer
+                )
         
-        # Update guardrails with allowed tables
-        guardrails.allowed_tables = schema_loader.allowed_tables
-        
-        # Validate SQL against guardrails
-        is_valid, error_message = guardrails.validate(generated_sql)
-        
-        if not is_valid:
-            logger.warning(f"SQL validation failed: {error_message}")
-            return GenerateSQLResponse(
-                success=False,
-                error=f"Generated SQL failed security validation: {error_message}"
-            )
-        
-        # Extract tables used in query
-        tables_used = list(guardrails._extract_tables(generated_sql))
-        
+        # If we exit the loop, we failed to generate valid SQL after retries
         return GenerateSQLResponse(
-            success=True,
-            sql=generated_sql,
-            tables_used=tables_used,
-            explanation=f"Query to answer: {request.question}"
+            success=False,
+            error=f"Failed to generate valid SQL after {MAX_RETRIES} attempts. Last error: {last_error}",
+            sql=None
         )
         
     except Exception as e:

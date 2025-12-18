@@ -106,37 +106,59 @@ class SchemaLoader:
         finally:
             conn.close()
     
-    def get_schema_context(self, tables: List[str] = None) -> str:
+    def get_schema_context(self, tables: List[str] = None, compact: bool = False) -> str:
         """
         Generate schema context string for LLM prompt.
-        
-        Args:
-            tables: Specific tables to include (None = all cached)
-            
-        Returns:
-            Formatted schema description for LLM
         """
         if not self._schema_cache:
             self.load_schema(tables)
         
         tables_to_include = tables or list(self._schema_cache.keys())
         
+        # If too many tables, force compact mode
+        if len(tables_to_include) > 20:
+            compact = True
+            
         lines = ["Database Schema:", "=" * 50, ""]
         
-        for table_name in tables_to_include:
-            if table_name not in self._schema_cache:
-                continue
-                
-            table = self._schema_cache[table_name]
-            lines.append(f"Table: {table.name}")
-            lines.append("-" * 40)
-            
-            for col in table.columns:
-                nullable = "NULL" if col.is_nullable else "NOT NULL"
-                default = f" DEFAULT {col.column_default}" if col.column_default else ""
-                lines.append(f"  - {col.name}: {col.data_type} {nullable}{default}")
-            
+        if compact:
+            lines.append("Note: Displaying compact schema. Only key tables show columns.")
             lines.append("")
+            
+            # Key tables for Manufacturing domain
+            PRIORITY_TABLES = {
+                'log_book_tap_hole_log',
+                'additive_additionalinformation',
+                'assistant_analysisresult',
+                'core_process_tap_production',
+                'furnace_config_tap_hole',
+                'utils_globalunit'
+            }
+            
+            for table_name in tables_to_include:
+                if table_name not in self._schema_cache: continue
+                table = self._schema_cache[table_name]
+                
+                # Show columns only for priority tables or KPI tables
+                if table.name.startswith('kpi_') or any(p in table.name for p in PRIORITY_TABLES):
+                    cols = ", ".join([c.name for c in table.columns])
+                    lines.append(f"Table: {table.name}({cols})")
+                else:
+                    lines.append(f"Table: {table.name}")
+        else:
+            for table_name in tables_to_include:
+                if table_name not in self._schema_cache:
+                    continue
+                    
+                table = self._schema_cache[table_name]
+                lines.append(f"Table: {table.name}")
+                lines.append("-" * 40)
+                
+                for col in table.columns:
+                    nullable = "NULL" if col.is_nullable else "NOT NULL"
+                    lines.append(f"  - {col.name}: {col.data_type} {nullable}")
+                
+                lines.append("")
         
         return "\n".join(lines)
     
