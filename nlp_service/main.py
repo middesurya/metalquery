@@ -1,15 +1,11 @@
 """
 NLP Service - Main FastAPI Application
-Provides endpoints for Natural Language to SQL conversion.
+Enhanced with schema analysis and SQL validation.
 
-SECURITY NOTE: This service ONLY generates SQL and formats responses.
-It does NOT connect to or execute queries against the database.
-Database access is handled by the Django backend (security boundary).
+✅ VERSION 4.0.0 - WITH DIAGNOSTICS
 """
 import os
 import sys
-
-# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, HTTPException
@@ -18,135 +14,137 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import logging
 
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_groq import ChatGroq
+from langchain_core.messages import HumanMessage
 
 from config import settings
 from guardrails import SQLGuardrails
-from schema_loader import SchemaLoader
-from prompts import get_sql_generation_prompt, RESPONSE_FORMAT_PROMPT
+from schema_loader import schema_loader
 
-# Configure logging
+# ✅ NEW ENHANCED IMPORTS
+from prompts_v2 import build_prompt_with_schema, build_prompt_debug, SchemaAnalyzer
+from diagnostic import SQLDiagnostic
+
+# ✅ BRD RAG IMPORTS
+from brd_rag import brd_handler
+from query_router import route_query, QueryRouter
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
 app = FastAPI(
-    title="NLP-to-SQL Service",
-    description="""
-    Converts natural language queries to safe SQL statements.
-    
-    **Security Architecture:**
-    - This service ONLY generates SQL - it does NOT execute queries
-    - Database access is handled by the Django backend (security boundary)
-    - AI is isolated from the database
-    """,
-    version="2.0.0"
+    title="NLP-to-SQL + BRD RAG Service",
+    version="5.0.0",
+    description="Hybrid service: SQL generation from data + RAG from BRD documents"
 )
 
-# Add CORS middleware - in production, restrict to Django backend only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://localhost:3000"],  # Django + React
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
 
-# Initialize components
-schema_loader = SchemaLoader()
 guardrails = SQLGuardrails()
-
+diagnostic = None
+brd_initialized = False
 
 # ============================================================
-# Request/Response Models
+# Models
 # ============================================================
 
 class GenerateSQLRequest(BaseModel):
-    """Request model for SQL generation."""
     question: str
-    tables: Optional[List[str]] = None  # Optional: limit to specific tables
-
+    tables: Optional[List[str]] = None
 
 class GenerateSQLResponse(BaseModel):
-    """Response model for SQL generation."""
     success: bool
     sql: Optional[str] = None
     error: Optional[str] = None
     tables_used: Optional[List[str]] = None
-    explanation: Optional[str] = None  # Brief explanation of the query
-
+    explanation: Optional[str] = None
+    validation_warnings: Optional[List[str]] = None
 
 class FormatResponseRequest(BaseModel):
-    """Request model for response formatting."""
     question: str
     sql: str
-    results: List[Dict[str, Any]]
-
+    results: Optional[List[Any]] = []
 
 class FormatResponseResponse(BaseModel):
-    """Response model for formatted answer."""
     success: bool
     response: Optional[str] = None
     error: Optional[str] = None
 
-
 class SchemaInfoResponse(BaseModel):
-    """Response model for schema information."""
     tables: List[str]
     schema_context: str
 
-
 # ============================================================
-# LLM Configuration
+# LLM
 # ============================================================
 
 def get_llm():
-    """Get configured LLM instance."""
-    return ChatOpenAI(
-        model="gpt-4o-mini",  # Cost-effective and capable
-        temperature=0,  # Deterministic output for SQL
-        api_key=settings.openai_api_key
+    return ChatGroq(
+        api_key=settings.groq_api_key,
+        model=settings.model_name,
+        temperature=0,
+        max_tokens=512,
     )
 
-
 # ============================================================
-# Startup Events
+# Startup
 # ============================================================
 
 @app.on_event("startup")
 async def startup_event():
-    """Load schema on startup."""
-    logger.info("Starting NLP-to-SQL Service (SQL Generation Only)...")
-    logger.info("NOTE: This service does NOT connect to the database for queries.")
-    logger.info("Database access is handled by the Django backend.")
+    global diagnostic, brd_initialized
+    
+    logger.info(f"Starting Hybrid NLP Service (SQL + BRD RAG)...")
+    logger.info(f"Model: {settings.model_name}")
+    logger.info(f"Backend: {settings.django_api_url}")
+    
+    # Initialize SQL schema
     try:
         schema_loader.load_schema()
-        logger.info(f"Loaded schema for tables: {schema_loader.get_table_names()}")
+        schema_dict = schema_loader.get_schema_dict()
+        
+        # ✅ Initialize diagnostic
+        diagnostic = SQLDiagnostic(schema_dict)
+        
+        logger.info(f"✓ Schema loaded: {len(schema_loader.get_table_names())} tables")
+        logger.info(f"✓ SQL Diagnostic initialized")
+        
     except Exception as e:
-        logger.warning(f"Could not load schema on startup: {e}")
-        logger.info("Schema will be loaded on first request")
-
+        logger.warning(f"Schema load warning: {e}")
+    
+    # ✅ Initialize BRD RAG system
+    try:
+        logger.info("Initializing BRD RAG system...")
+        brd_initialized = brd_handler.initialize()
+        if brd_initialized:
+            logger.info("✓ BRD RAG system initialized")
+        else:
+            logger.warning("⚠ BRD RAG system failed to initialize (PDFs may not be indexed)")
+    except Exception as e:
+        logger.warning(f"BRD RAG initialization warning: {e}")
 
 # ============================================================
-# Health & Schema Endpoints
+# Endpoints
 # ============================================================
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {
         "status": "healthy",
         "service": "nlp-to-sql",
-        "version": "2.0.0",
-        "mode": "sql-generation-only",
-        "note": "This service generates SQL but does NOT execute queries"
+        "model": settings.model_name,
+        "backend_url": settings.django_api_url,
+        "schema_loaded": len(schema_loader.get_table_names() or []) > 0
     }
-
 
 @app.get("/api/v1/schema", response_model=SchemaInfoResponse)
 async def get_schema():
-    """Get available database schema information."""
     try:
         if not schema_loader.get_table_names():
             schema_loader.load_schema()
@@ -159,163 +157,346 @@ async def get_schema():
         logger.error(f"Error loading schema: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/api/v1/reload-schema")
-async def reload_schema(tables: Optional[List[str]] = None):
-    """Reload database schema (useful after schema changes)."""
-    try:
-        schema_loader._schema_cache.clear()
-        schema_loader._allowed_tables.clear()
-        schema_loader.load_schema(tables=tables)
-        return {
-            "success": True,
-            "tables": schema_loader.get_table_names()
-        }
-    except Exception as e:
-        logger.error(f"Error reloading schema: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================
-# SQL Generation Endpoint (Core Functionality)
-# ============================================================
+def clean_generated_sql(text: str) -> str:
+    import re
+    import sqlparse
+    
+    generated_sql = text.strip()
+    
+    # Remove markdown code blocks
+    if "```" in generated_sql:
+        match = re.search(r"```(?:sql)?\s*(.*?)\s*```", generated_sql, re.DOTALL | re.IGNORECASE)
+        if match:
+            generated_sql = match.group(1)
+        else:
+            generated_sql = generated_sql.replace("```sql", "").replace("```", "")
+    
+    # Extract SELECT statement
+    sql_start_match = re.search(r"(SELECT\s+.*)", generated_sql, re.DOTALL | re.IGNORECASE)
+    if sql_start_match:
+        generated_sql = sql_start_match.group(1)
+    
+    # Parse and clean with sqlparse
+    parsed = sqlparse.parse(generated_sql)
+    if parsed and len(parsed) > 0:
+        # Get the first statement as string
+        generated_sql = str(parsed[0]).strip()
+    
+    # Remove trailing semicolon
+    if generated_sql.endswith(";"):
+        generated_sql = generated_sql[:-1]
+    
+    return generated_sql.strip()
 
 @app.post("/api/v1/generate-sql", response_model=GenerateSQLResponse)
 async def generate_sql(request: GenerateSQLRequest):
     """
-    Generate SQL from natural language question.
-    
-    This is the main endpoint that converts user questions to SQL.
-    The generated SQL is validated by guardrails before returning.
-    
-    NOTE: This endpoint does NOT execute the SQL.
-    SQL execution is handled by the Django backend.
+    ✅ ENHANCED FLOW:
+    1. Build schema-aware prompt (detects furnace, date, aggregation)
+    2. Generate SQL with LLM
+    3. Validate with diagnostic
+    4. If invalid, regenerate with debug prompt
     """
-    logger.info(f"Generating SQL for question: {request.question}")
+    logger.info(f"Q: {request.question}")
     
     try:
-        # Load schema if not already loaded
         if not schema_loader.get_table_names():
-            schema_loader.load_schema(tables=request.tables)
+            schema_loader.load_schema()
         
-        # Get schema context for the prompt
-        schema_context = schema_loader.get_schema_context(tables=request.tables)
+        schema_dict = schema_loader.get_schema_dict()
         
-        # Build system prompt with schema
-        system_prompt = get_sql_generation_prompt(schema_context)
+        global diagnostic
+        if diagnostic is None:
+            diagnostic = SQLDiagnostic(schema_dict)
         
-        # Initialize LLM
-        llm = get_llm()
+        generated_sql = None
+        validation_warnings = []
         
-        # Generate SQL using LLM
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=request.question)
-        ]
+        # ════════════════════════════════════════════════════════
+        # STEP 1: Schema-Aware Prompt
+        # ════════════════════════════════════════════════════════
+        logger.info("📝 Building schema-aware prompt...")
+        try:
+            prompt = build_prompt_with_schema(schema_dict, request.question)
+            logger.info(f"✓ Prompt: {len(prompt)} chars")
+        except Exception as e:
+            logger.warning(f"Enhanced prompt failed: {e}, using basic")
+            prompt = f"""You are a SQL expert for manufacturing database.
+
+Schema: {schema_loader.get_schema_context(tables=request.tables)}
+
+Generate ONLY valid SQL. No explanation.
+
+Question: {request.question}
+
+SQL:"""
         
-        response = llm.invoke(messages)
-        generated_sql = response.content.strip()
+        # ════════════════════════════════════════════════════════
+        # STEP 2: Generate SQL
+        # ════════════════════════════════════════════════════════
+        logger.info("🤖 Generating SQL...")
+        try:
+            llm = get_llm()
+            response = llm.invoke([HumanMessage(content=prompt)])
+            raw_output = response.content.strip()
+            logger.info(f"Raw: {raw_output[:80]}...")
+            
+            generated_sql = clean_generated_sql(raw_output)
+            logger.info(f"Generated: {generated_sql[:80]}...")
+            
+        except Exception as e:
+            logger.error(f"LLM error: {e}")
+            raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
         
-        # Clean up SQL (remove markdown code blocks if present)
-        if generated_sql.startswith("```"):
-            lines = generated_sql.split("\n")
-            generated_sql = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-        generated_sql = generated_sql.strip()
+        if not generated_sql or not generated_sql.upper().startswith("SELECT"):
+            logger.error("Invalid SQL (no SELECT)")
+            raise HTTPException(status_code=500, detail="Invalid SQL generated")
         
-        logger.info(f"Generated SQL: {generated_sql}")
+        # ════════════════════════════════════════════════════════
+        # STEP 3: Validate
+        # ════════════════════════════════════════════════════════
+        logger.info("✓ Validating SQL...")
+        diag = diagnostic.diagnose_query(request.question, generated_sql)
         
-        # Update guardrails with allowed tables
+        if diag['errors']:
+            logger.warning(f"Errors: {diag['errors']}")
+            
+            # ════════════════════════════════════════════════════════
+            # STEP 4: Regenerate with Debug
+            # ════════════════════════════════════════════════════════
+            logger.info("🔧 Regenerating with debug hints...")
+            try:
+                debug_prompt = build_prompt_debug(schema_dict, request.question, generated_sql)
+                llm = get_llm()
+                debug_response = llm.invoke([HumanMessage(content=debug_prompt)])
+                debug_sql = clean_generated_sql(debug_response.content.strip())
+                
+                debug_diag = diagnostic.diagnose_query(request.question, debug_sql)
+                
+                if not debug_diag['errors']:
+                    logger.info("✓ Regenerated SQL valid!")
+                    generated_sql = debug_sql
+                    validation_warnings = diag['warnings']
+                else:
+                    logger.warning("Still has errors")
+                    validation_warnings = diag['errors'] + diag['warnings']
+                    
+            except Exception as e:
+                logger.warning(f"Debug regen failed: {e}")
+                validation_warnings = diag['errors'] + diag['warnings']
+        else:
+            validation_warnings = diag['warnings']
+            logger.info("✓ SQL valid!")
+        
+        # ════════════════════════════════════════════════════════
+        # STEP 5: Security Check
+        # ════════════════════════════════════════════════════════
         guardrails.allowed_tables = schema_loader.allowed_tables
-        
-        # Validate SQL against guardrails
         is_valid, error_message = guardrails.validate(generated_sql)
         
         if not is_valid:
-            logger.warning(f"SQL validation failed: {error_message}")
-            return GenerateSQLResponse(
-                success=False,
-                error=f"Generated SQL failed security validation: {error_message}"
-            )
+            logger.error(f"Security check failed: {error_message}")
+            raise HTTPException(status_code=403, detail=f"Security: {error_message}")
         
-        # Extract tables used in query
         tables_used = list(guardrails._extract_tables(generated_sql))
+        logger.info(f"✓ Tables: {tables_used}")
         
         return GenerateSQLResponse(
             success=True,
             sql=generated_sql,
             tables_used=tables_used,
-            explanation=f"Query to answer: {request.question}"
+            explanation=f"Generated with {settings.model_name} + schema analysis",
+            validation_warnings=validation_warnings if validation_warnings else None
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generating SQL: {e}")
+        logger.error(f"Error: {e}", exc_info=True)
         return GenerateSQLResponse(
             success=False,
-            error=f"Failed to generate SQL: {str(e)}"
+            error=f"Failed: {str(e)}"
         )
-
-
-# ============================================================
-# Response Formatting Endpoint
-# ============================================================
 
 @app.post("/api/v1/format-response", response_model=FormatResponseResponse)
 async def format_response(request: FormatResponseRequest):
-    """
-    Format SQL query results into natural language.
-    
-    Takes the original question, executed SQL, and results,
-    then generates a human-friendly response.
-    
-    NOTE: This receives results from Django backend - 
-    this service does NOT query the database.
-    """
-    logger.info(f"Formatting response for question: {request.question}")
+    logger.info(f"Formatting: {request.question}")
     
     try:
-        llm = get_llm()
+        results = request.results
+        row_count = len(results)
         
-        # Format results for prompt
-        results_str = str(request.results[:20])  # Limit to first 20 rows
-        if len(request.results) > 20:
-            results_str += f"\n... and {len(request.results) - 20} more rows"
-        
-        prompt = RESPONSE_FORMAT_PROMPT.format(
-            question=request.question,
-            sql=request.sql,
-            results=results_str
-        )
-        
-        messages = [HumanMessage(content=prompt)]
-        response = llm.invoke(messages)
+        if row_count == 0:
+            response_text = f"No data found for: '{request.question}'"
+        elif row_count == 1:
+            response_text = f"Result for '{request.question}':\n\n{results}"
+        else:
+            preview = results[:5]
+            response_text = f"Found {row_count} results.\n\nFirst {len(preview)}:\n"
+            for i, row in enumerate(preview, 1):
+                response_text += f"\n{i}. {row}"
+            if row_count > 5:
+                response_text += f"\n\n... and {row_count - 5} more rows."
         
         return FormatResponseResponse(
             success=True,
-            response=response.content.strip()
+            response=response_text
         )
         
     except Exception as e:
-        logger.error(f"Error formatting response: {e}")
+        logger.error(f"Format error: {e}")
         return FormatResponseResponse(
             success=False,
-            error=f"Failed to format response: {str(e)}"
+            error=f"Format failed: {str(e)}"
         )
 
 
 # ============================================================
-# Main Entry Point
+# ✅ HYBRID CHAT ENDPOINT - Answers both SQL and BRD questions
 # ============================================================
+
+class HybridChatRequest(BaseModel):
+    question: str
+    force_type: Optional[str] = None  # "sql" or "brd" to bypass auto-detection
+
+class HybridChatResponse(BaseModel):
+    success: bool
+    query_type: str  # "sql" or "brd"
+    response: Optional[str] = None
+    sql: Optional[str] = None
+    results: Optional[List[Any]] = None
+    sources: Optional[List[str]] = None
+    error: Optional[str] = None
+    routing_confidence: Optional[float] = None
+
+@app.post("/api/v1/chat", response_model=HybridChatResponse)
+async def hybrid_chat(request: HybridChatRequest):
+    """
+    ✅ UNIFIED CHAT ENDPOINT
+    Automatically routes questions to:
+    - SQL generation for data queries
+    - BRD RAG for documentation/process queries
+    """
+    logger.info(f"Hybrid chat: {request.question}")
+    
+    try:
+        # 🛡️ GUARDRAIL: Block dangerous data modification requests
+        question_lower = request.question.lower()
+        dangerous_intents = ["delete", "drop", "truncate", "remove all", "clear all", "erase"]
+        safe_contexts = ["how to", "what is", "show", "get", "display", "list"]
+        
+        # Check if question has dangerous intent without safe context
+        has_dangerous_intent = any(d in question_lower for d in dangerous_intents)
+        has_safe_context = any(s in question_lower for s in safe_contexts)
+        
+        if has_dangerous_intent and not has_safe_context:
+            logger.warning(f"🛡️ Blocked dangerous request: {request.question[:50]}")
+            return HybridChatResponse(
+                success=True,
+                query_type="blocked",
+                response="🔒 I'm a READ-ONLY assistant! I can only help you view and analyze data, not modify or delete it. Try asking something like 'show OEE for furnace 1' instead!",
+                sql=None,
+                results=None,
+                sources=None,
+                error=None,
+                routing_confidence=1.0
+            )
+        
+        # Determine query type
+        if request.force_type:
+            query_type = request.force_type
+            confidence = 1.0
+        else:
+            query_type, confidence = route_query(request.question)
+        
+        logger.info(f"Routed to: {query_type} (confidence: {confidence:.2f})")
+        
+        # Handle SQL queries
+        if query_type == "sql" or query_type == "unknown":
+            # Use existing SQL generation logic
+            sql_request = GenerateSQLRequest(question=request.question)
+            sql_response = await generate_sql(sql_request)
+            
+            return HybridChatResponse(
+                success=sql_response.success,
+                query_type="sql",
+                response=sql_response.explanation if sql_response.success else sql_response.error,
+                sql=sql_response.sql,
+                results=None,  # Results come from Django after execution
+                sources=sql_response.tables_used,
+                error=sql_response.error if not sql_response.success else None,
+                routing_confidence=confidence
+            )
+        
+        # Handle BRD queries
+        elif query_type == "brd":
+            if not brd_initialized:
+                return HybridChatResponse(
+                    success=False,
+                    query_type="brd",
+                    error="BRD document system not initialized. Please wait for indexing to complete.",
+                    routing_confidence=confidence
+                )
+            
+            # Query BRD documents
+            llm = get_llm()
+            brd_result = brd_handler.query(request.question, llm=llm, top_k=5)
+            
+            return HybridChatResponse(
+                success=brd_result["success"],
+                query_type="brd",
+                response=brd_result.get("response"),
+                sql=None,
+                results=None,
+                sources=brd_result.get("sources", []),
+                error=brd_result.get("error"),
+                routing_confidence=confidence
+            )
+        
+        else:
+            return HybridChatResponse(
+                success=False,
+                query_type="unknown",
+                error="Could not determine query type",
+                routing_confidence=confidence
+            )
+            
+    except Exception as e:
+        logger.error(f"Hybrid chat error: {e}", exc_info=True)
+        return HybridChatResponse(
+            success=False,
+            query_type="unknown",
+            error=f"Chat failed: {str(e)}"
+        )
+
+
+@app.get("/api/v1/routing-test")
+async def test_routing(question: str):
+    """Test the query router without executing."""
+    query_type, confidence = route_query(question)
+    explanation = QueryRouter.explain_routing(question)
+    return {
+        "question": question,
+        "query_type": query_type,
+        "confidence": confidence,
+        "explanation": explanation
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
     
-    print("\n" + "=" * 60)
-    print("NLP-to-SQL Service v2.0.0")
-    print("=" * 60)
-    print("Mode: SQL Generation Only")
-    print("This service generates SQL but does NOT execute queries.")
-    print("Database access is handled by the Django backend.")
-    print("=" * 60 + "\n")
+    print("\n" + "=" * 70)
+    print("Hybrid NLP Service - SQL + BRD RAG (Groq API)")
+    print("=" * 70)
+    print(f"Model: {settings.model_name}")
+    print(f"Host: {settings.nlp_service_host}:{settings.nlp_service_port}")
+    print(f"Backend: {settings.django_api_url}")
+    print("Endpoints:")
+    print("  - /api/v1/chat        (Hybrid: auto-routes SQL vs BRD)")
+    print("  - /api/v1/generate-sql (SQL only)")
+    print("  - /api/v1/routing-test (Test routing)")
+    print("=" * 70 + "\n")
     
     uvicorn.run(
         "main:app",
@@ -323,3 +504,4 @@ if __name__ == "__main__":
         port=settings.nlp_service_port,
         reload=True
     )
+

@@ -15,19 +15,20 @@ import time
 from datetime import datetime
 from functools import wraps
 import requests
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from django.db import connection
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.cache import cache
 
+from .models import AuditLog
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # NLP Service URL (configure in Django settings or environment)
-NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8001')
+NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8003')
 
 
 # ============================================================
@@ -129,29 +130,26 @@ class AuditLogger:
         user_id: str = None
     ):
         """Log a query for audit purposes."""
-        log_entry = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'client_ip': client_ip,
-            'user_id': user_id or 'anonymous',
-            'question': question[:500],  # Truncate long questions
-            'sql': sql[:1000] if sql else None,  # Truncate long SQL
-            'success': success,
-            'row_count': row_count,
-            'error': error[:500] if error else None
-        }
-        
-        # Log to application log
+        try:
+            AuditLog.objects.create(
+                client_ip=client_ip,
+                user_id=user_id or 'anonymous',
+                question=question,
+                sql=sql,
+                success=success,
+                row_count=row_count,
+                error=error
+            )
+        except Exception as e:
+            logger.error(f"Failed to save audit log: {e}")
+
+        # Still log to console/application log
         if success:
             logger.info(f"AUDIT: Query success - User: {user_id}, Rows: {row_count}")
         else:
             logger.warning(f"AUDIT: Query failed - User: {user_id}, Error: {error}")
         
-        # In production, you would also:
-        # - Write to database audit table
-        # - Send to security monitoring system
-        # - Store in append-only log
-        
-        return log_entry
+        return True
 
 
 audit_logger = AuditLogger()
@@ -222,23 +220,9 @@ class SQLValidator:
 # Database Access Layer
 # ============================================================
 
-def get_db_connection():
-    """Create a read-only database connection."""
-    return psycopg2.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=os.getenv('DB_PORT', '5433'),
-        dbname=os.getenv('DB_NAME', 'postgres'),
-        user=os.getenv('DB_USER', 'postgres'),
-        password=os.getenv('DB_PASSWORD', ''),
-        cursor_factory=RealDictCursor,
-        # Security: Set statement timeout
-        options='-c statement_timeout=10000'  # 10 second timeout
-    )
-
-
 def execute_safe_query(sql: str, limit: int = 100) -> list:
     """
-    Execute a validated SQL query safely.
+    Execute a validated SQL query safely using Django connection.
     
     Args:
         sql: The SQL query to execute
@@ -252,14 +236,13 @@ def execute_safe_query(sql: str, limit: int = 100) -> list:
     if 'LIMIT' not in sql_upper:
         sql = f"{sql.rstrip(';')} LIMIT {limit}"
     
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
+    with connection.cursor() as cursor:
         cursor.execute(sql)
-        results = cursor.fetchall()
-        return [dict(row) for row in results]
-    finally:
-        conn.close()
+        columns = [col[0] for col in cursor.description]
+        return [
+            dict(zip(columns, row))
+            for row in cursor.fetchall()
+        ]
 
 
 # ============================================================
@@ -343,14 +326,14 @@ def chat(request):
         logger.info(f"Chat request from {client_ip}: {question[:100]}...")
         
         # ============================================
-        # Step 1: Call NLP service to generate SQL
+        # Step 1: Call NLP Hybrid Service (SQL or BRD)
         # (AI boundary - NLP never touches database)
         # ============================================
         try:
             nlp_response = requests.post(
-                f"{NLP_SERVICE_URL}/api/v1/generate-sql",
+                f"{NLP_SERVICE_URL}/api/v1/chat",  # ✅ New hybrid endpoint
                 json={'question': question},
-                timeout=30
+                timeout=120  # Increased for local LLM on CPU
             )
             nlp_data = nlp_response.json()
         except requests.RequestException as e:
@@ -365,14 +348,51 @@ def chat(request):
             }, status=503)
         
         if not nlp_data.get('success'):
-            error = nlp_data.get('error', 'Failed to generate SQL')
+            error = nlp_data.get('error', 'Failed to process question')
             audit_logger.log_query(client_ip, question, None, False, error=error)
             return JsonResponse({
                 'success': False,
                 'error': error
             })
         
+        query_type = nlp_data.get('query_type', 'sql')
+        logger.info(f"Query type: {query_type}")
+        
+        # ============================================
+        # Handle BRD (Documentation) Queries
+        # ============================================
+        if query_type == 'brd':
+            # BRD queries return response directly from NLP service
+            response_text = nlp_data.get('response', 'No response from BRD documents.')
+            sources = nlp_data.get('sources', [])
+            
+            audit_logger.log_query(
+                client_ip, question, None, True,
+                row_count=0,
+                user_id=user_context.get('user_id')
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'query_type': 'brd',
+                'response': response_text,
+                'sources': sources,
+                'sql': None,
+                'results': [],
+                'row_count': 0
+            })
+        
+        # ============================================
+        # Handle SQL (Data) Queries
+        # ============================================
         sql = nlp_data.get('sql')
+        
+        if not sql:
+            return JsonResponse({
+                'success': False,
+                'error': 'No SQL generated'
+            })
+        
         logger.info(f"Generated SQL: {sql}")
         
         # ============================================
@@ -424,9 +444,9 @@ def chat(request):
                 json={
                     'question': question,
                     'sql': sql,
-                    'results': results[:50]  # Limit for formatting
+                    'results': results,  # Send results for formatting
                 },
-                timeout=30
+                timeout=300
             )
             format_data = format_response.json()
             natural_response = format_data.get('response', f"Found {row_count} results.")
@@ -446,6 +466,7 @@ def chat(request):
         
         return JsonResponse({
             'success': True,
+            'query_type': 'sql',
             'response': natural_response,
             'sql': sql,
             'results': results[:50],  # Limit results sent to frontend
@@ -469,20 +490,63 @@ def chat(request):
 # Schema Info Endpoint
 # ============================================================
 
+from .relevant_models import RELEVANT_MODELS, TABLE_DESCRIPTIONS
+
+def get_local_schema():
+    """
+    Generate schema dictionary from local Django models.
+    """
+    schema = {}
+    for model in RELEVANT_MODELS:
+        table_name = model._meta.db_table
+        description = TABLE_DESCRIPTIONS.get(table_name, f"Table: {table_name}")
+        
+        fields = []
+        for field in model._meta.get_fields():
+            if field.is_relation and field.many_to_many:
+                continue  # Skip M2M for simplicity in this context if check needed
+            
+            try:
+                # Basic field info
+                field_info = {
+                    "name": field.name,
+                    "type": field.get_internal_type(),
+                }
+                
+                # Add verbose name if available
+                if hasattr(field, 'verbose_name') and field.verbose_name:
+                    field_info["description"] = str(field.verbose_name)
+                
+                # Add relationship info
+                if field.is_relation and field.related_model:
+                    field_info["foreign_key"] = field.related_model._meta.db_table
+                
+                fields.append(field_info)
+            except Exception:
+                continue
+
+        schema[table_name] = {
+            "description": description,
+            "columns": fields
+        }
+    return schema
+
 @csrf_exempt
 @require_http_methods(["GET"])
 def schema_info(request):
     """Get available database schema information."""
+    # Return local schema definition to ensure chatbot uses ONLY the requested tables
     try:
-        response = requests.get(
-            f"{NLP_SERVICE_URL}/api/v1/schema",
-            timeout=10
-        )
-        return JsonResponse(response.json())
-    except Exception as e:
-        logger.error(f"Schema fetch error: {e}")
+        schema = get_local_schema()
         return JsonResponse({
-            'error': 'Failed to fetch schema'
+            "success": True,
+            "schema": schema,
+            "source": "local_restricted"
+        })
+    except Exception as e:
+        logger.error(f"Schema generation error: {e}")
+        return JsonResponse({
+            'error': 'Failed to generate schema'
         }, status=500)
 
 
@@ -503,11 +567,10 @@ def health(request):
     except:
         pass
     
-    # Check database connectivity
+    # Check database connectivity using Django connection
     db_healthy = False
     try:
-        conn = get_db_connection()
-        conn.close()
+        connection.ensure_connection()
         db_healthy = True
     except:
         pass
@@ -515,9 +578,10 @@ def health(request):
     return JsonResponse({
         'status': 'healthy' if (nlp_healthy and db_healthy) else 'degraded',
         'service': 'django-chatbot',
-        'version': '2.0.0',
+        'version': '3.0.0',
         'components': {
             'nlp_service': 'healthy' if nlp_healthy else 'unavailable',
             'database': 'healthy' if db_healthy else 'unavailable'
         }
     })
+

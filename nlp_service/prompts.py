@@ -1,193 +1,481 @@
-"""
-LangChain Prompts for NLP-to-SQL Conversion
-Defines system prompts and few-shot examples for SQL generation.
-Specialized for Metallurgy and Industrial Materials Database.
-"""
+# prompts.py - Version 2.0
+# Advanced NLP-to-SQL Prompt System with Dynamic Schema Introspection
+# Addresses: schema validation, column matching, date handling, furnace filtering, feedback loop
 
-# System prompt that instructs the LLM on how to generate SQL
-SYSTEM_PROMPT = """You are a SQL expert assistant specializing in metallurgy and materials science databases.
-You convert natural language questions about materials, their properties, and applications to PostgreSQL queries.
+from typing import Dict, List, Any, Optional
+import re
 
-CRITICAL SECURITY RULES:
-1. ONLY generate SELECT statements - never INSERT, UPDATE, DELETE, DROP, or any other data-modifying commands
-2. ONLY query tables from the provided schema - do not reference any other tables
-3. NEVER include comments (-- or /* */) in your SQL
-4. Generate a SINGLE SQL statement only - no multiple statements separated by semicolons
-5. Do not access system tables (pg_*, information_schema)
-6. Always use proper WHERE clauses to filter results
-7. Limit results to 100 rows maximum unless specifically asked for more
+# ============================================================
+# SYSTEM PROMPT - Enhanced with dynamic schema guidance
+# ============================================================
 
-FORMATTING RULES:
-1. Return ONLY the SQL query, no explanations or markdown
-2. Use proper PostgreSQL syntax
-3. Use table aliases for clarity in joins
-4. Format dates using PostgreSQL date functions
+SYSTEM_PROMPT = """
+You are an expert PostgreSQL SQL generator for a furnace manufacturing analytics system.
 
-DOMAIN KNOWLEDGE - Important Material Properties:
-- ultimate_tensile_strength (Su): Maximum stress a material can withstand (MPa)
-- yield_strength (Sy): Stress at which material begins to deform plastically (MPa)
-- elastic_modulus (E): Young's Modulus - material stiffness (MPa)
-- shear_modulus (G): Resistance to shear deformation (MPa)
-- poisson_ratio (mu/ν): Ratio of transverse to axial strain
-- density (Ro): Mass per unit volume (kg/m³)
-- brinell_hardness (Bhn): Hardness measure using Brinell scale
-- vickers_hardness (HV): Hardness measure using Vickers scale
-- elongation (A5): Ductility measure - how much material stretches before breaking (%)
+STRICT RULES:
+1. Use ONLY tables and columns from the PROVIDED SCHEMA below.
+2. NEVER invent table names, column names, or relationships.
+3. Output ONLY the SQL query - no explanations, no markdown, no backticks.
+4. Use PostgreSQL syntax.
+5. If you cannot answer from the schema, respond with: INSUFFICIENT_SCHEMA
 
-COMMON MATERIAL CATEGORIES:
-- Steel (various SAE grades: 1015, 1020, 4140, 4340, etc.)
-- Stainless Steel (300 series, 400 series)
-- Cast Iron (Grey, Nodular, Malleable)
-- Aluminum Alloys (2xxx, 6xxx, 7xxx series)
-- Copper Alloys (Brass, Bronze)
-- Magnesium Alloys
+DATE HANDLING RULES:
+- KPI tables use 'date' column (DATE type)
+- Config tables use 'effective_date' column
+- Log tables use 'obs_start_dt' or timestamp columns
+- For date ranges: WHERE date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD'
+- For relative dates: WHERE date >= CURRENT_DATE - INTERVAL 'N days'
 
-HEAT TREATMENTS:
-- as-rolled, normalized, annealed, tempered, case-hardened, heat treated
+FURNACE FILTERING RULES:
+- Filter furnaces by 'furnace_no' column (INTEGER) in KPI tables
+- Use exact match: WHERE furnace_no = 1
+- furnace_id is a foreign key - do NOT use for filtering
 
-TIPS FOR QUERIES:
-- Use the material_full_info view for comprehensive queries
-- Use ILIKE for case-insensitive text matching
-- For "strongest" queries, use ORDER BY ultimate_tensile_strength DESC
-- For "hardest" queries, use ORDER BY brinell_hardness DESC or vickers_hardness DESC
-- For "lightest" queries, use ORDER BY density ASC
+AGGREGATION RULES:
+- Percentages (oee_percentage, yield_percentage, etc.) → use AVG()
+- Quantities (quantity_produced, cast_weight, etc.) → use SUM()
+- Durations (downtime_hours, mtbf_hours, etc.) → use SUM() or AVG()
+- Counts (incidents, events) → use COUNT()
+- Always GROUP BY furnace_no when comparing furnaces
 
-AVAILABLE DATABASE SCHEMA:
-{schema}
-
-Remember: Your output should be a single, executable SQL SELECT statement and nothing else.
+OUTPUT FORMAT:
+- Single valid SELECT statement
+- Add LIMIT 100 for raw data queries
+- Use ORDER BY date DESC for time-series data
 """
 
-# Few-shot examples for common metallurgy query patterns
+# ============================================================
+# TABLE METADATA - For dynamic schema introspection
+# ============================================================
+
+TABLE_METADATA = {
+    # Production Performance
+    "kpi_overall_equipment_efficiency_data": {
+        "description": "OEE/Health percentage by furnace and date",
+        "value_column": "oee_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["oee", "health", "efficiency", "performance", "overall equipment"]
+    },
+    "kpi_cycle_time_data": {
+        "description": "Production cycle time metrics",
+        "value_column": "cycle_time",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["cycle", "time", "production time"]
+    },
+    "kpi_yield_data": {
+        "description": "Yield percentage metrics",
+        "value_column": "yield_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["yield", "output quality"]
+    },
+    "kpi_output_rate_data": {
+        "description": "Output rate percentage",
+        "value_column": "output_rate_percentage",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["output", "rate", "production rate"]
+    },
+    "kpi_quantity_produced_data": {
+        "description": "Total quantity produced",
+        "value_column": "quantity_produced",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["quantity", "batch", "produced", "count"]
+    },
+    
+    # Quality
+    "kpi_defect_rate_data": {
+        "description": "Defect rate percentage",
+        "value_column": "defect_rate",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["defect", "quality", "defective"]
+    },
+    "kpi_first_pass_yield_data": {
+        "description": "First pass yield percentage",
+        "value_column": "first_pass_yield",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["first pass", "fpy"]
+    },
+    "kpi_rework_rate_data": {
+        "description": "Rework rate percentage",
+        "value_column": "rework_rate_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["rework"]
+    },
+    
+    # Energy
+    "kpi_energy_used_data": {
+        "description": "Total energy consumption",
+        "value_column": "energy_used",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["energy used", "consumption", "power"]
+    },
+    "kpi_energy_efficiency_data": {
+        "description": "Energy efficiency metrics",
+        "value_column": "energy_efficiency",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["energy efficiency"]
+    },
+    
+    # Maintenance & Reliability
+    "kpi_downtime_data": {
+        "description": "Downtime hours by furnace",
+        "value_column": "downtime_hours",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["downtime", "down time", "stoppage"]
+    },
+    "kpi_maintenance_compliance_data": {
+        "description": "Maintenance compliance percentage",
+        "value_column": "compliance_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["maintenance", "compliance"]
+    },
+    "kpi_mean_time_between_failures_data": {
+        "description": "MTBF in hours",
+        "value_column": "mtbf_hours",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["mtbf", "mean time between failure", "reliability"]
+    },
+    "kpi_mean_time_to_repair_data": {
+        "description": "MTTR in hours",
+        "value_column": "mttr_hours",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["mttr", "mean time to repair", "repair time"]
+    },
+    "kpi_mean_time_between_stoppages_data": {
+        "description": "MTBS in hours",
+        "value_column": "mtbs_hours",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["mtbs", "stoppages"]
+    },
+    "kpi_planned_maintenance_data": {
+        "description": "Planned maintenance percentage",
+        "value_column": "planned_maintenance_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["planned maintenance"]
+    },
+    
+    # Safety
+    "kpi_safety_incidents_reported_data": {
+        "description": "Safety incidents count",
+        "value_column": "incidents_percentage",
+        "aggregation": "COUNT",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["safety", "incident", "accident"]
+    },
+    
+    # Financial
+    "kpi_total_revenue_data": {
+        "description": "Total revenue",
+        "value_column": "total_revenue",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["revenue", "income"]
+    },
+    "kpi_operating_costs_data": {
+        "description": "Operating costs",
+        "value_column": "operating_costs",
+        "aggregation": "SUM",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["cost", "operating", "expense"]
+    },
+    
+    # Capacity
+    "kpi_resource_capacity_utilization_data": {
+        "description": "Capacity utilization percentage",
+        "value_column": "utilization_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["capacity", "utilization"]
+    },
+    "kpi_on_time_delivery_data": {
+        "description": "On-time delivery percentage",
+        "value_column": "on_time_delivery_percentage",
+        "aggregation": "AVG",
+        "date_column": "date",
+        "has_furnace": True,
+        "keywords": ["delivery", "on time"]
+    },
+    
+    # Core Process
+    "core_process_tap_production": {
+        "description": "Tap production records with cast weight",
+        "value_column": "cast_weight",
+        "aggregation": "SUM",
+        "date_column": "tap_production_datetime",
+        "has_furnace": True,
+        "keywords": ["tap", "production", "cast", "weight"]
+    },
+    "core_process_tap_grading": {
+        "description": "Tap grading and quality allocation",
+        "value_column": "allocated_grade",
+        "aggregation": None,
+        "date_column": "grading_datetime",
+        "has_furnace": True,
+        "keywords": ["grade", "grading", "quality grade"]
+    },
+    
+    # Configuration
+    "furnace_config_parameters": {
+        "description": "Furnace configuration and settings",
+        "value_column": None,
+        "aggregation": None,
+        "date_column": "effective_date",
+        "has_furnace": True,
+        "keywords": ["config", "configuration", "parameter", "setting", "crucible"]
+    },
+    
+    # Downtime Events
+    "log_book_furnace_down_time_event": {
+        "description": "Detailed downtime events with reasons",
+        "value_column": "downtime_hours",
+        "aggregation": "SUM",
+        "date_column": "obs_start_dt",
+        "has_furnace": True,
+        "keywords": ["downtime event", "reason", "log"]
+    },
+    
+    # Added: 4 missing tables for complete schema coverage
+    "furnace_furnaceconfig": {
+        "description": "Furnace master data (furnace_no, description, workshop)",
+        "value_column": None,
+        "aggregation": None,
+        "date_column": None,
+        "has_furnace": True,
+        "keywords": ["furnace", "furnace list", "furnace config", "all furnaces"]
+    },
+    "plant_plant": {
+        "description": "Plant/site master data",
+        "value_column": None,
+        "aggregation": None,
+        "date_column": None,
+        "has_furnace": False,
+        "keywords": ["plant", "site", "location", "factory"]
+    },
+    "log_book_reason_master": {
+        "description": "Downtime reason codes and descriptions",
+        "value_column": None,
+        "aggregation": None,
+        "date_column": None,
+        "has_furnace": False,
+        "keywords": ["reason", "downtime reason", "cause", "reason code"]
+    },
+    "log_book_downtime_type_master": {
+        "description": "Downtime type classifications (planned, unplanned)",
+        "value_column": None,
+        "aggregation": None,
+        "date_column": None,
+        "has_furnace": False,
+        "keywords": ["downtime type", "type", "planned", "unplanned", "classification"]
+    },
+}
+
+# ============================================================
+# FEW-SHOT EXAMPLES - Comprehensive coverage
+# ============================================================
+
 FEW_SHOT_EXAMPLES = [
-    {
-        "question": "Show me all steel materials",
-        "sql": "SELECT * FROM material_full_info WHERE category ILIKE '%steel%' LIMIT 100"
-    },
-    {
-        "question": "What is the tensile strength of SAE 4140 steel?",
-        "sql": "SELECT material_name, grade, heat_treatment, tensile_strength_mpa, yield_strength_mpa FROM material_full_info WHERE grade ILIKE '%4140%' OR material_name ILIKE '%4140%'"
-    },
-    {
-        "question": "Which material has the highest tensile strength?",
-        "sql": "SELECT material_name, grade, heat_treatment, tensile_strength_mpa FROM material_full_info WHERE tensile_strength_mpa IS NOT NULL ORDER BY tensile_strength_mpa DESC LIMIT 10"
-    },
-    {
-        "question": "Compare the hardness of different aluminum alloys",
-        "sql": "SELECT material_name, grade, heat_treatment, bhn, hv FROM material_full_info WHERE category ILIKE '%aluminum%' AND (bhn IS NOT NULL OR hv IS NOT NULL) ORDER BY COALESCE(bhn, 0) DESC LIMIT 50"
-    },
-    {
-        "question": "Find lightweight materials with high strength",
-        "sql": "SELECT material_name, category, tensile_strength_mpa, density_kg_m3, (tensile_strength_mpa / NULLIF(density_kg_m3, 0)) as strength_to_weight_ratio FROM material_full_info WHERE tensile_strength_mpa IS NOT NULL AND density_kg_m3 IS NOT NULL ORDER BY strength_to_weight_ratio DESC NULLS LAST LIMIT 20"
-    },
-    {
-        "question": "What stainless steels are available?",
-        "sql": "SELECT material_name, grade, heat_treatment, tensile_strength_mpa, yield_strength_mpa FROM material_full_info WHERE category = 'Stainless Steel' OR is_stainless = true ORDER BY grade LIMIT 100"
-    },
-    {
-        "question": "Show materials suitable for high temperature applications",
-        "sql": "SELECT material_name, category, heat_treatment, tensile_strength_mpa, elastic_modulus_mpa FROM material_full_info WHERE heat_treatment ILIKE '%tempered%' OR heat_treatment ILIKE '%heat treated%' ORDER BY tensile_strength_mpa DESC LIMIT 50"
-    },
-    {
-        "question": "List all heat treatment options",
-        "sql": "SELECT DISTINCT name FROM heat_treatments ORDER BY name"
-    },
-    {
-        "question": "What are the mechanical properties of copper alloys?",
-        "sql": "SELECT material_name, tensile_strength_mpa, yield_strength_mpa, elastic_modulus_mpa, elongation_percent, density_kg_m3 FROM material_full_info WHERE category ILIKE '%copper%' OR category ILIKE '%brass%' OR category ILIKE '%bronze%' ORDER BY tensile_strength_mpa DESC LIMIT 50"
-    },
-    {
-        "question": "Find materials with yield strength above 500 MPa",
-        "sql": "SELECT material_name, category, grade, heat_treatment, yield_strength_mpa, tensile_strength_mpa FROM material_full_info WHERE yield_strength_mpa > 500 ORDER BY yield_strength_mpa DESC LIMIT 100"
-    },
-    {
-        "question": "Which materials are currently in use?",
-        "sql": "SELECT material_name, category, grade, tensile_strength_mpa, yield_strength_mpa FROM material_full_info WHERE is_in_use = true ORDER BY category, material_name LIMIT 100"
-    },
-    {
-        "question": "Show DIN standard materials",
-        "sql": "SELECT material_name, standard, grade, heat_treatment, tensile_strength_mpa, yield_strength_mpa FROM material_full_info WHERE standard = 'DIN' ORDER BY material_name LIMIT 100"
-    },
-    {
-        "question": "Compare properties of normalized vs annealed steel",
-        "sql": "SELECT material_name, heat_treatment, tensile_strength_mpa, yield_strength_mpa, bhn FROM material_full_info WHERE category ILIKE '%steel%' AND (heat_treatment ILIKE '%normalized%' OR heat_treatment ILIKE '%annealed%') ORDER BY material_name, heat_treatment LIMIT 100"
-    },
-    {
-        "question": "What is the density of different cast irons?",
-        "sql": "SELECT material_name, category, density_kg_m3, tensile_strength_mpa FROM material_full_info WHERE category ILIKE '%cast iron%' ORDER BY density_kg_m3 DESC LIMIT 50"
-    },
-    {
-        "question": "Find materials with Poisson ratio around 0.3",
-        "sql": "SELECT material_name, category, poisson_ratio, elastic_modulus_mpa FROM material_full_info WHERE poisson_ratio BETWEEN 0.28 AND 0.32 ORDER BY poisson_ratio LIMIT 50"
-    }
+    # OEE/Health
+    {"user": "What is the average OEE for Furnace 1 between Jan 1 and Jan 31, 2025?",
+     "sql": "SELECT AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    {"user": "Show furnace health by furnace",
+     "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC"},
+    
+    # Yield
+    {"user": "Show the average yield by furnace",
+     "sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY furnace_no ORDER BY avg_yield DESC"},
+    {"user": "Yield trend for Furnace 2",
+     "sql": "SELECT date, yield_percentage FROM kpi_yield_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+    
+    # Downtime
+    {"user": "What is the total downtime for Furnace 1 in January 2025?",
+     "sql": "SELECT SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    {"user": "Downtime by furnace last 30 days",
+     "sql": "SELECT furnace_no, SUM(downtime_hours) as total FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY furnace_no ORDER BY total DESC"},
+    
+    # Energy
+    {"user": "What is the average energy efficiency for Furnace 1 in January 2025?",
+     "sql": "SELECT AVG(energy_efficiency) as avg_efficiency FROM kpi_energy_efficiency_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    {"user": "Total energy used last week",
+     "sql": "SELECT furnace_no, SUM(energy_used) as total FROM kpi_energy_used_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY furnace_no"},
+    
+    # MTBF/Reliability
+    {"user": "What is the MTBF for Furnace 1 in January 2025?",
+     "sql": "SELECT AVG(mtbf_hours) as avg_mtbf FROM kpi_mean_time_between_failures_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    {"user": "MTTR by furnace",
+     "sql": "SELECT furnace_no, AVG(mttr_hours) as avg_mttr FROM kpi_mean_time_to_repair_data GROUP BY furnace_no ORDER BY avg_mttr ASC"},
+    
+    # Tap Production
+    {"user": "What was the total tap production for Furnace 1 in January 2025?",
+     "sql": "SELECT SUM(cast_weight) as total_production FROM core_process_tap_production WHERE furnace_no = 1 AND tap_production_datetime BETWEEN '2025-01-01' AND '2025-01-31'"},
+    {"user": "Recent tap production",
+     "sql": "SELECT tap_id, furnace_no, cast_weight, tap_production_datetime FROM core_process_tap_production ORDER BY tap_production_datetime DESC LIMIT 20"},
+    
+    # Quality
+    {"user": "Defect rate by furnace",
+     "sql": "SELECT furnace_no, AVG(defect_rate) as avg_defect FROM kpi_defect_rate_data GROUP BY furnace_no ORDER BY avg_defect ASC"},
+    
+    # Maintenance
+    {"user": "Show maintenance compliance percentage",
+     "sql": "SELECT furnace_no, AVG(compliance_percentage) as avg_compliance FROM kpi_maintenance_compliance_data GROUP BY furnace_no"},
+    
+    # Safety
+    {"user": "How many safety incidents were reported for Furnace 1 in January 2025?",
+     "sql": "SELECT COUNT(*) as incident_count FROM kpi_safety_incidents_reported_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    
+    # Config
+    {"user": "What are the crucible diameter and depth for Furnace 1?",
+     "sql": "SELECT crucible_diameter, crucible_depth FROM furnace_config_parameters WHERE furnace_no = 1"},
 ]
 
+# ============================================================
+# DYNAMIC SCHEMA INTROSPECTION
+# ============================================================
+
+def find_best_table(question: str) -> Optional[Dict]:
+    """
+    Find the best matching table based on question keywords.
+    Returns table metadata or None if no match.
+    """
+    question_lower = question.lower()
+    best_match = None
+    best_score = 0
+    
+    for table_name, metadata in TABLE_METADATA.items():
+        score = 0
+        for keyword in metadata["keywords"]:
+            if keyword in question_lower:
+                score += len(keyword)  # Longer matches score higher
+        
+        if score > best_score:
+            best_score = score
+            best_match = {"table": table_name, **metadata}
+    
+    return best_match
+
+
+def validate_columns(sql: str, schema_context: str) -> tuple:
+    """
+    Validate that columns in SQL exist in schema.
+    Returns (is_valid, error_message or None).
+    """
+    # Extract column names from SQL (simplified)
+    # In production, use sqlparse for accurate parsing
+    
+    # Get table name from SQL
+    from_match = re.search(r"FROM\s+(\w+)", sql, re.IGNORECASE)
+    if not from_match:
+        return True, None  # Can't validate without table name
+    
+    table_name = from_match.group(1).lower()
+    
+    # Check if table exists in schema
+    if table_name not in schema_context.lower():
+        return False, f"Table '{table_name}' not found in schema"
+    
+    return True, None
+
+
+def generate_sql_hint(question: str) -> str:
+    """
+    Generate a hint for the LLM based on question analysis.
+    """
+    table_info = find_best_table(question)
+    if not table_info:
+        return ""
+    
+    hint = f"\nHINT: Best matching table is '{table_info['table']}'"
+    hint += f"\n- Value column: {table_info['value_column']}"
+    hint += f"\n- Use {table_info['aggregation']}() for aggregation"
+    hint += f"\n- Date column: {table_info['date_column']}"
+    if table_info['has_furnace']:
+        hint += "\n- Filter by 'furnace_no' for specific furnace"
+    
+    return hint
+
+
+# ============================================================
+# BUILD PROMPT FUNCTION
+# ============================================================
+
+def build_prompt(schema_text: str, user_question: str) -> str:
+    """
+    Constructs the final prompt with dynamic hints and examples.
+    """
+    # Generate dynamic hint based on question
+    hint = generate_sql_hint(user_question)
+    
+    # Build few-shot examples
+    examples = ""
+    for ex in FEW_SHOT_EXAMPLES:
+        examples += f"\nUser: {ex['user']}\nSQL: {ex['sql']}\n"
+
+    return f"""
+{SYSTEM_PROMPT}
+{hint}
+
+SCHEMA:
+{schema_text}
+
+FEW-SHOT EXAMPLES:
+{examples}
+
+User: {user_question}
+SQL:
+"""
+
+
+# ============================================================
+# LEGACY COMPATIBILITY
+# ============================================================
 
 def get_sql_generation_prompt(schema_context: str) -> str:
-    """
-    Get the full system prompt with schema context.
-    
-    Args:
-        schema_context: Database schema information
-        
-    Returns:
-        Formatted system prompt
-    """
-    return SYSTEM_PROMPT.format(schema=schema_context)
+    """Legacy function for backward compatibility."""
+    return SYSTEM_PROMPT + f"\n\nSCHEMA:\n{schema_context}"
 
 
 def get_few_shot_prompt() -> str:
-    """
-    Generate few-shot examples as a formatted string.
-    
-    Returns:
-        Formatted few-shot examples
-    """
-    examples = []
-    for ex in FEW_SHOT_EXAMPLES:
-        examples.append(f"Question: {ex['question']}\nSQL: {ex['sql']}")
-    
-    return "\n\n".join(examples)
+    """Generate few-shot examples as a formatted string."""
+    return "\n\n".join([f"Q: {ex['user']}\nSQL: {ex['sql']}" for ex in FEW_SHOT_EXAMPLES])
 
 
-# Response formatting prompt for metallurgy domain
-RESPONSE_FORMAT_PROMPT = """You are a materials science expert that explains database query results in natural language.
-
-Given the following:
-- User's original question: {question}
-- SQL query that was executed: {sql}
-- Query results: {results}
-
-Provide a clear, concise, natural language response that answers the user's question based on the results.
-
-GUIDELINES:
-1. If there are no results, politely inform the user and suggest alternative searches
-2. Format property values with units:
-   - Strength values in MPa (megapascals)
-   - Density in kg/m³
-   - Hardness with appropriate scale (Bhn or HV)
-   - Elongation in percentage (%)
-3. When comparing materials, highlight key differences
-4. Use technical terms appropriately but explain them if needed
-5. If results include many rows, summarize key findings
-6. Format numbers nicely (e.g., 1,500 MPa instead of 1500)
-
-Keep the response professional but accessible.
-
+RESPONSE_FORMAT_PROMPT = """Explain query results concisely.
+Question: {question}
+SQL: {sql}
+Results: {results}
+Format values with units (%, hours, tons, kWh). Be brief.
 Your response:"""
-
-
-# Domain-specific hints for query understanding
-MATERIAL_SYNONYMS = {
-    "strong": ["high tensile strength", "high yield strength"],
-    "hard": ["high hardness", "high brinell", "high vickers"],
-    "soft": ["low hardness", "ductile"],
-    "light": ["low density", "lightweight"],
-    "heavy": ["high density"],
-    "stiff": ["high elastic modulus", "high Young's modulus"],
-    "flexible": ["low elastic modulus", "ductile"],
-    "ductile": ["high elongation"],
-    "brittle": ["low elongation"],
-    "corrosion resistant": ["stainless steel", "aluminum", "copper alloy"],
-    "wear resistant": ["high hardness", "tempered", "case-hardened"]
-}
