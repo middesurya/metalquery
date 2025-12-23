@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
+import ModeToggle from './components/ModeToggle';
+import config from './config';
 
 // Django Backend API URL (React → Django → NLP → LLM)
 // Security: React calls Django, which owns the database
@@ -165,23 +167,27 @@ function App() {
     const [messages, setMessages] = useState([
         {
             id: 1,
-            text: "Welcome to the Metallurgy Materials Database! I can help you find information about materials, their properties, and specifications. What would you like to know?",
+            text: "Welcome to IGNIS Furnace Analytics! I can help you query furnace KPIs, analyze production data, or answer questions from BRD documents. What would you like to know?",
             isUser: false,
             timestamp: new Date().toISOString()
         }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [queryMode, setQueryMode] = useState('auto');
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
+    // IGNIS-specific suggestions
     const suggestions = [
-        "What steel has the highest tensile strength?",
-        "Show aluminum alloys with yield strength > 300 MPa",
-        "Compare properties of SAE 4140 steel",
-        "Find lightweight materials with high strength",
-        "List all stainless steels",
-        "What are the hardest materials?"
+        "Show OEE by furnace for last week",
+        "What is the total downtime for Furnace 1?",
+        "Compare yield percentage across all furnaces",
+        "Show MTBF and MTTR trends",
+        "What is the energy consumption by furnace?",
+        "How to configure furnace parameters?",
+        "What is EHS?",
+        "Show production efficiency for January"
     ];
 
     const scrollToBottom = () => {
@@ -291,29 +297,29 @@ function App() {
                         <h3>Database Info</h3>
                         <div className="info-card">
                             <div className="info-item">
-                                <span className="info-value">827</span>
-                                <span className="info-label">Materials</span>
+                                <span className="info-value">29</span>
+                                <span className="info-label">KPI Tables</span>
                             </div>
                             <div className="info-item">
-                                <span className="info-value">11</span>
-                                <span className="info-label">Categories</span>
+                                <span className="info-value">4</span>
+                                <span className="info-label">Furnaces</span>
                             </div>
                             <div className="info-item">
-                                <span className="info-value">34</span>
-                                <span className="info-label">Heat Treatments</span>
+                                <span className="info-value">33</span>
+                                <span className="info-label">BRD Docs</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="sidebar-section">
-                        <h3>Properties Available</h3>
+                        <h3>Available KPIs</h3>
                         <ul className="property-list">
-                            <li>Tensile Strength (MPa)</li>
-                            <li>Yield Strength (MPa)</li>
-                            <li>Elastic Modulus (MPa)</li>
-                            <li>Density (kg/m³)</li>
-                            <li>Hardness (Bhn/HV)</li>
-                            <li>Poisson's Ratio</li>
+                            <li>OEE / Health (%)</li>
+                            <li>Downtime (hours)</li>
+                            <li>Yield / Defect Rate</li>
+                            <li>MTBF / MTTR / MTBS</li>
+                            <li>Energy Consumption</li>
+                            <li>Production Efficiency</li>
                         </ul>
                     </div>
                 </div>
@@ -331,11 +337,16 @@ function App() {
                 {/* Chat Header */}
                 <header className="chat-header">
                     <div className="header-left">
-                        <h2>Metallurgy Assistant</h2>
-                        <p>Ask questions in natural language about materials and properties</p>
+                        <h2>IGNIS Analytics Assistant</h2>
+                        <p>Ask questions about furnace KPIs, production data, or BRD documentation</p>
                     </div>
                     <div className="header-right">
-                        <span className="badge">GPT-4 Powered</span>
+                        <ModeToggle
+                            mode={queryMode}
+                            onModeChange={setQueryMode}
+                            disabled={isLoading}
+                        />
+                        <span className="badge">Groq LLM</span>
                     </div>
                 </header>
 

@@ -1,0 +1,383 @@
+{
+  "summary": {
+    "total_tests": 24,
+    "exact_match_count": 6,
+    "exact_match_rate": "25.0%",
+    "semantic_match_count": 6,
+    "semantic_match_rate": "25.0%",
+    "overall_accuracy": "50.0%",
+    "table_accuracy": "54.2%",
+    "aggregation_accuracy": "58.3%",
+    "execution_success_rate": "54.2%",
+    "avg_response_time_ms": "7251",
+    "category_breakdown": {
+      "Performance - OEE": {
+        "total": 3,
+        "passed": 2
+      },
+      "Quality - Yield": {
+        "total": 2,
+        "passed": 2
+      },
+      "Quality - Defect": {
+        "total": 2,
+        "passed": 2
+      },
+      "Maintenance - Downtime": {
+        "total": 3,
+        "passed": 3
+      },
+      "Energy": {
+        "total": 2,
+        "passed": 2
+      },
+      "Maintenance - Reliability": {
+        "total": 2,
+        "passed": 0
+      },
+      "Production - Tap": {
+        "total": 2,
+        "passed": 0
+      },
+      "Safety": {
+        "total": 1,
+        "passed": 0
+      },
+      "Maintenance": {
+        "total": 1,
+        "passed": 0
+      },
+      "Capacity": {
+        "total": 1,
+        "passed": 0
+      },
+      "Configuration": {
+        "total": 1,
+        "passed": 0
+      },
+      "Complex": {
+        "total": 2,
+        "passed": 0
+      },
+      "Edge Case": {
+        "total": 2,
+        "passed": 1
+      }
+    },
+    "timestamp": "2025-12-23T12:25:24.349341"
+  },
+  "results": [
+    {
+      "test_id": "perf_001",
+      "question": "What is the average OEE for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 3291.302442550659,
+      "error_message": null
+    },
+    {
+      "test_id": "perf_002",
+      "question": "Show furnace health by furnace",
+      "expected_sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC",
+      "generated_sql": "SELECT furnace_no, oee_percentage \nFROM kpi_overall_equipment_efficiency_data \nWHERE date >= CURRENT_DATE - INTERVAL '30 days' \nORDER BY date DESC \nLIMIT 100",
+      "accuracy_metric": "table_correct",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": true,
+      "response_time_ms": 3143.956184387207,
+      "error_message": null
+    },
+    {
+      "test_id": "perf_003",
+      "question": "OEE trend for the last 30 days",
+      "expected_sql": "SELECT date, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC",
+      "generated_sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC LIMIT 100",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 3192.7292346954346,
+      "error_message": null
+    },
+    {
+      "test_id": "yield_001",
+      "question": "Show the average yield by furnace",
+      "expected_sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY furnace_no ORDER BY avg_yield DESC",
+      "generated_sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY furnace_no ORDER BY avg_yield DESC",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 3292.935371398926,
+      "error_message": null
+    },
+    {
+      "test_id": "yield_002",
+      "question": "Yield percentage for Furnace 2 in January 2025",
+      "expected_sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 2 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 2 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 12422.515153884888,
+      "error_message": null
+    },
+    {
+      "test_id": "defect_001",
+      "question": "Defect rate by furnace",
+      "expected_sql": "SELECT furnace_no, AVG(defect_rate) as avg_defect FROM kpi_defect_rate_data GROUP BY furnace_no ORDER BY avg_defect ASC",
+      "generated_sql": "SELECT furnace_no, AVG(defect_rate) as avg_defect_rate FROM kpi_defect_rate_data GROUP BY furnace_no ORDER BY avg_defect_rate DESC",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16253.310203552246,
+      "error_message": null
+    },
+    {
+      "test_id": "defect_002",
+      "question": "What is the defect rate trend for Furnace 1?",
+      "expected_sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE furnace_no = 1 ORDER BY date DESC LIMIT 100",
+      "generated_sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE furnace_no = 1 ORDER BY date DESC LIMIT 100",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16201.651811599731,
+      "error_message": null
+    },
+    {
+      "test_id": "down_001",
+      "question": "What is the total downtime for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "SELECT SUM(downtime_hours) FROM kpi_downtime_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16457.881927490234,
+      "error_message": null
+    },
+    {
+      "test_id": "down_002",
+      "question": "Downtime by furnace last 30 days",
+      "expected_sql": "SELECT furnace_no, SUM(downtime_hours) as total FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY furnace_no ORDER BY total DESC",
+      "generated_sql": "SELECT furnace_no, SUM(downtime_hours) as total_downtime \nFROM kpi_downtime_data \nWHERE date >= CURRENT_DATE - INTERVAL '30 days' \nGROUP BY furnace_no \nORDER BY total_downtime DESC",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16536.871910095215,
+      "error_message": null
+    },
+    {
+      "test_id": "down_003",
+      "question": "Which furnace has the most downtime?",
+      "expected_sql": "SELECT furnace_no, SUM(downtime_hours) as total FROM kpi_downtime_data GROUP BY furnace_no ORDER BY total DESC LIMIT 1",
+      "generated_sql": "SELECT furnace_no, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY furnace_no ORDER BY total_downtime DESC LIMIT 1",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16331.22706413269,
+      "error_message": null
+    },
+    {
+      "test_id": "energy_001",
+      "question": "What is the average energy efficiency for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT AVG(energy_efficiency) FROM kpi_energy_efficiency_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "SELECT AVG(energy_efficiency) \nFROM kpi_energy_efficiency_data \nWHERE furnace_no = 1 \nAND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16437.47854232788,
+      "error_message": null
+    },
+    {
+      "test_id": "energy_002",
+      "question": "Total energy used last week",
+      "expected_sql": "SELECT furnace_no, SUM(energy_used) as total FROM kpi_energy_used_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY furnace_no",
+      "generated_sql": "SELECT SUM(energy_used) AS total_energy_used FROM kpi_energy_used_data WHERE date >= CURRENT_DATE - INTERVAL '7 days'",
+      "accuracy_metric": "semantic_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 16248.911142349243,
+      "error_message": null
+    },
+    {
+      "test_id": "mtbf_001",
+      "question": "What is the MTBF for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT AVG(mtbf_hours) FROM kpi_mean_time_between_failures_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2818.8366889953613,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "mttr_001",
+      "question": "MTTR by furnace",
+      "expected_sql": "SELECT furnace_no, AVG(mttr_hours) as avg_mttr FROM kpi_mean_time_to_repair_data GROUP BY furnace_no ORDER BY avg_mttr ASC",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2816.896915435791,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "tap_001",
+      "question": "What was the total tap production for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT SUM(cast_weight) as total_production FROM core_process_tap_production WHERE furnace_no = 1 AND tap_production_datetime BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2798.051357269287,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "tap_002",
+      "question": "Recent tap production",
+      "expected_sql": "SELECT tap_id, furnace_no, cast_weight, tap_production_datetime FROM core_process_tap_production ORDER BY tap_production_datetime DESC LIMIT 20",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": false,
+      "response_time_ms": 2864.7515773773193,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "safety_001",
+      "question": "How many safety incidents were reported for Furnace 1 in January 2025?",
+      "expected_sql": "SELECT COUNT(*) FROM kpi_safety_incidents_reported_data WHERE furnace_no = 1 AND date BETWEEN '2025-01-01' AND '2025-01-31'",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2878.168821334839,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "maint_001",
+      "question": "Show maintenance compliance percentage",
+      "expected_sql": "SELECT furnace_no, AVG(compliance_percentage) as avg_compliance FROM kpi_maintenance_compliance_data GROUP BY furnace_no",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2846.011161804199,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "cap_001",
+      "question": "Capacity utilization by furnace",
+      "expected_sql": "SELECT furnace_no, AVG(utilization_percentage) as avg_utilization FROM kpi_resource_capacity_utilization_data GROUP BY furnace_no ORDER BY avg_utilization DESC",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2811.8507862091064,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "config_001",
+      "question": "What are the crucible diameter and depth for Furnace 1?",
+      "expected_sql": "SELECT crucible_diameter, crucible_depth FROM furnace_config_parameters WHERE furnace_no = 1",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": false,
+      "response_time_ms": 2815.2759075164795,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "complex_001",
+      "question": "Which furnaces have OEE below 80%?",
+      "expected_sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no HAVING AVG(oee_percentage) < 80",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2790.187120437622,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "complex_002",
+      "question": "Top 5 furnaces by total downtime in 2025",
+      "expected_sql": "SELECT furnace_no, SUM(downtime_hours) as total FROM kpi_downtime_data WHERE date >= '2025-01-01' GROUP BY furnace_no ORDER BY total DESC LIMIT 5",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2837.6879692077637,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "edge_001",
+      "question": "furnace health",
+      "expected_sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no",
+      "generated_sql": "",
+      "accuracy_metric": "failed",
+      "table_match": false,
+      "column_match": false,
+      "aggregation_match": false,
+      "execution_success": false,
+      "response_time_ms": 2821.9056129455566,
+      "error_message": "HTTP 500"
+    },
+    {
+      "test_id": "edge_002",
+      "question": "yeild for furnance 1",
+      "expected_sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 1",
+      "generated_sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 1",
+      "accuracy_metric": "exact_match",
+      "table_match": true,
+      "column_match": false,
+      "aggregation_match": true,
+      "execution_success": true,
+      "response_time_ms": 3102.588653564453,
+      "error_message": null
+    }
+  ]
+}

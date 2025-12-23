@@ -1,0 +1,46 @@
+python : 
+SystemCheckError: 
+System check 
+identified some 
+issues:
+At line:1 char:1
++ python manage.py 
+check > 
+check_error.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (SystemC   
+ heckErro...ed so    
+me issues::Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+
+ERRORS:
+ignis.KpiQuantityProd
+ucedData.plant_id: 
+(models.E006) The 
+field 'plant_id' 
+clashes with the 
+field 'plant' from 
+model 'ignis.kpiquant
+ityproduceddata'.
+ignis.MaterialMasterM
+aterialmaster.group_i
+d: (models.E006) The 
+field 'group_id' 
+clashes with the 
+field 'group' from 
+model 'ignis.material
+mastermaterialmaster'
+.
+
+System check 
+identified 2 issues 
+(0 silenced).

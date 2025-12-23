@@ -1,0 +1,84 @@
+/* Mode Toggle Styles */
+
+.mode-toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mode-toggle-label {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.mode-toggle {
+    display: flex;
+    background: rgba(30, 41, 59, 0.8);
+    border-radius: 8px;
+    padding: 4px;
+    gap: 4px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.mode-toggle.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mode-btn:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.mode-btn:disabled {
+    cursor: not-allowed;
+}
+
+.mode-icon {
+    font-size: 1rem;
+}
+
+.mode-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .mode-toggle-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .mode-btn {
+        padding: 6px 12px;
+    }
+    
+    .mode-label {
+        display: none;
+    }
+}
