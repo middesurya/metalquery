@@ -29,6 +29,8 @@ from accuracy_scorer import AccuracyScorer
 # ✅ BRD RAG IMPORTS
 from brd_rag import brd_handler
 from query_router import route_query, QueryRouter
+from query_guard import QueryGuard, IGNIS_KEYWORDS
+from guardrails_layer import CombinedGuard, GuardrailsLayer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,10 +50,12 @@ app.add_middleware(
 )
 
 guardrails = SQLGuardrails()
-guardrails = SQLGuardrails()
 diagnostic = None
 accuracy_scorer = AccuracyScorer()
 brd_initialized = False
+guard = QueryGuard(confidence_threshold=0.35)  # ✅ Custom Query Guard
+combined_guard = None  # ✅ Combined Guard (initialized on startup)
+guardrails_layer = None  # ✅ Guardrails AI layer
 
 # ============================================================
 # Models
@@ -133,6 +137,18 @@ async def startup_event():
             logger.warning("⚠ BRD RAG system failed to initialize (PDFs may not be indexed)")
     except Exception as e:
         logger.warning(f"BRD RAG initialization warning: {e}")
+    
+    # ✅ Initialize Combined Guard (Custom + Guardrails AI)
+    global combined_guard, guardrails_layer
+    try:
+        guardrails_layer = GuardrailsLayer()
+        combined_guard = CombinedGuard()
+        logger.info("✓ Combined Guard initialized (Custom + Guardrails AI)")
+    except Exception as e:
+        logger.warning(f"⚠ Combined Guard failed, using custom guard only: {e}")
+        combined_guard = None
+    
+    logger.info("✓ Query Guard initialized")
 
 # ============================================================
 # Endpoints
@@ -452,7 +468,45 @@ async def hybrid_chat(request: HybridChatRequest):
     logger.info(f"Hybrid chat: {request.question}")
     
     try:
-        # 🛡️ GUARDRAIL: Block dangerous data modification requests
+        # ═══════════════════════════════════════════════════════════
+        # ✅ STEP 0: GUARDRAILS AI CHECK (PII, profanity, sensitive data)
+        # ═══════════════════════════════════════════════════════════
+        if guardrails_layer:
+            gr_result = guardrails_layer.validate(request.question)
+            if not gr_result.is_safe:
+                logger.warning(f"🛡️ Guardrails AI blocked: {gr_result.reason}")
+                return HybridChatResponse(
+                    success=True,
+                    query_type="blocked",
+                    response=guardrails_layer.get_blocked_message(gr_result),
+                    sql=None,
+                    results=None,
+                    sources=None,
+                    error=None,
+                    routing_confidence=0.0
+                )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ✅ STEP 1: ENHANCED QUERY GUARD (7-layer protection)
+        # ═══════════════════════════════════════════════════════════
+        guard_result = guard.check_query_relevance(request.question)
+        
+        if not guard_result.is_relevant:
+            logger.warning(f"🛡️ Guard blocked: {guard_result.reason}")
+            return HybridChatResponse(
+                success=True,
+                query_type="blocked",
+                response=guard_result.suggested_message,
+                sql=None,
+                results=None,
+                sources=None,
+                error=None,
+                routing_confidence=0.0
+            )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ✅ STEP 2: DANGEROUS INTENT CHECK (data modification)
+        # ═══════════════════════════════════════════════════════════
         question_lower = request.question.lower()
         dangerous_intents = ["delete", "drop", "truncate", "remove all", "clear all", "erase"]
         safe_contexts = ["how to", "what is", "show", "get", "display", "list"]

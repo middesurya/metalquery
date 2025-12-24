@@ -128,7 +128,7 @@ const ScoreBadge = ({ label, score }) => {
 /**
  * Chat Message Component
  */
-const ChatMessage = ({ message, isUser }) => {
+const ChatMessage = ({ message, isUser, onEdit }) => {
     return (
         <div className={`message ${isUser ? 'user-message' : 'bot-message'}`}>
             {!isUser && (
@@ -137,7 +137,27 @@ const ChatMessage = ({ message, isUser }) => {
                 </div>
             )}
             <div className="message-content">
-                <div className="message-text">{message.text}</div>
+                <div className="message-text">
+                    {message.text}
+                    {isUser && onEdit && (
+                        <button
+                            onClick={() => onEdit(message.id, message.text)}
+                            title="Edit this question"
+                            style={{
+                                marginLeft: '12px',
+                                padding: '4px 10px',
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                color: '#fff'
+                            }}
+                        >
+                            ✏️ Edit
+                        </button>
+                    )}
+                </div>
 
                 {message.results && message.results.length > 0 && (
                     <ResultsTable results={message.results} />
@@ -208,6 +228,7 @@ function App() {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [queryMode, setQueryMode] = useState('auto');
+    const [editingMessageId, setEditingMessageId] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -301,10 +322,44 @@ function App() {
     const clearChat = () => {
         setMessages([{
             id: Date.now(),
-            text: "Chat cleared. How can I help you explore the metallurgy database?",
+            text: "Chat cleared. How can I help you explore the IGNIS database?",
             isUser: false,
             timestamp: new Date().toISOString()
         }]);
+        setEditingMessageId(null);
+    };
+
+    /**
+     * Handle edit message - populate input with message text
+     */
+    const handleEditMessage = (messageId, messageText) => {
+        setEditingMessageId(messageId);
+        setInputValue(messageText);
+        inputRef.current?.focus();
+    };
+
+    /**
+     * Cancel editing
+     */
+    const handleCancelEdit = () => {
+        setEditingMessageId(null);
+        setInputValue('');
+    };
+
+    /**
+     * Submit edited message
+     */
+    const handleSubmitEdit = async () => {
+        if (!inputValue.trim() || isLoading) return;
+
+        // Remove messages from the edited one onwards
+        const editIndex = messages.findIndex(m => m.id === editingMessageId);
+        if (editIndex !== -1) {
+            setMessages(prev => prev.slice(0, editIndex));
+        }
+
+        setEditingMessageId(null);
+        await sendMessage();
     };
 
     return (
@@ -315,7 +370,7 @@ function App() {
                     <div className="logo">
                         <span className="logo-icon">🔩</span>
                         <div className="logo-text">
-                            <h1>MetalQuery</h1>
+                            <h1>IGNIS</h1>
                             <span>AI Materials Assistant</span>
                         </div>
                     </div>
@@ -394,6 +449,7 @@ function App() {
                                 key={msg.id}
                                 message={msg}
                                 isUser={msg.isUser}
+                                onEdit={msg.isUser ? handleEditMessage : null}
                             />
                         ))}
                         {isLoading && <TypingIndicator />}
@@ -419,6 +475,30 @@ function App() {
 
                 {/* Input Area */}
                 <div className="input-container">
+                    {editingMessageId && (
+                        <div style={{
+                            padding: '8px 16px',
+                            background: 'rgba(99, 102, 241, 0.2)',
+                            borderRadius: '8px',
+                            marginBottom: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <span style={{ color: '#a5b4fc' }}>✏️ Editing question...</span>
+                            <button
+                                onClick={handleCancelEdit}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#f87171',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                ✕ Cancel
+                            </button>
+                        </div>
+                    )}
                     <div className="input-wrapper">
                         <input
                             ref={inputRef}
@@ -426,17 +506,19 @@ function App() {
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ask about materials, properties, or specifications..."
+                            placeholder={editingMessageId ? "Edit your question..." : "Ask about furnace, OEE, production..."}
                             disabled={isLoading}
                             className="chat-input"
                         />
                         <button
-                            onClick={() => sendMessage()}
+                            onClick={editingMessageId ? handleSubmitEdit : () => sendMessage()}
                             disabled={!inputValue.trim() || isLoading}
                             className="send-button"
                         >
                             {isLoading ? (
                                 <span className="loading-spinner"></span>
+                            ) : editingMessageId ? (
+                                <span>✓ Update</span>
                             ) : (
                                 <span>Send</span>
                             )}
