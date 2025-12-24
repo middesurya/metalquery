@@ -470,7 +470,9 @@ def chat(request):
             'response': natural_response,
             'sql': sql,
             'results': results[:50],  # Limit results sent to frontend
-            'row_count': row_count
+            'row_count': row_count,
+            'confidence_score': nlp_data.get('confidence_score'),
+            'relevance_score': nlp_data.get('relevance_score')
         })
         
     except json.JSONDecodeError:
