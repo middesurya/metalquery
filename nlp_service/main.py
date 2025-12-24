@@ -18,7 +18,7 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
 
 from config import settings
-from guardrails import SQLGuardrails
+from sql_guardrails import SQLGuardrails
 from schema_loader import schema_loader
 
 # ✅ NEW ENHANCED IMPORTS

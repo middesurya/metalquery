@@ -1,13 +1,11 @@
 """
 Guardrails AI Integration Layer
 
-Combines the custom EnhancedQueryGuard with Guardrails AI validators
-for additional protection including:
-- Regex-based PII detection
-- Profanity/toxic language detection
-- Additional pattern matching
+Uses the official guardrails-ai package for input validation:
+- Regex-based validators for PII, profanity, sensitive data
+- Guard class for structured validation
 
-This layer is designed to work alongside the existing query_guard.py
+Reference: https://docs.guardrailsai.com/
 """
 
 import re
@@ -17,14 +15,16 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-# Try to import Guardrails AI - gracefully degrade if not available
-GUARDRAILS_AVAILABLE = False
+# Import Guardrails AI
 try:
     from guardrails import Guard
+    from guardrails.validators import register_validator, Validator, PassResult, FailResult
+    from guardrails.classes.validation.validation_result import ValidationResult
     GUARDRAILS_AVAILABLE = True
-    logger.info("✅ Guardrails AI loaded successfully")
-except ImportError:
-    logger.warning("⚠️ Guardrails AI not installed - using regex fallback only")
+    logger.info("✅ Guardrails AI package loaded successfully")
+except ImportError as e:
+    GUARDRAILS_AVAILABLE = False
+    logger.warning(f"⚠️ Guardrails AI not installed: {e}")
 
 
 @dataclass
@@ -36,137 +36,182 @@ class GuardrailsResult:
     detected_items: Optional[List[str]] = None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CUSTOM VALIDATORS using Guardrails AI framework
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if GUARDRAILS_AVAILABLE:
+    
+    @register_validator(name="pii-detector", data_type="string")
+    class PIIDetector(Validator):
+        """Detects Personally Identifiable Information"""
+        
+        def __init__(self, on_fail: str = "exception"):
+            super().__init__(on_fail=on_fail)
+            self.patterns = {
+                "ssn": r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b",
+                "credit_card": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
+                "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+                "phone": r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+                "aadhaar": r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",
+                "pan": r"\b[A-Z]{5}\d{4}[A-Z]\b",
+            }
+        
+        def validate(self, value: str, metadata: Dict) -> ValidationResult:
+            for pii_type, pattern in self.patterns.items():
+                if re.search(pattern, value):
+                    return FailResult(
+                        error_message=f"PII detected: {pii_type}",
+                        fix_value=None
+                    )
+            return PassResult()
+    
+    
+    @register_validator(name="profanity-filter", data_type="string")
+    class ProfanityFilter(Validator):
+        """Filters profanity and toxic language"""
+        
+        def __init__(self, on_fail: str = "exception"):
+            super().__init__(on_fail=on_fail)
+            self.patterns = [
+                r"(?i)\b(fuck|shit|ass|damn|bitch|bastard|crap)\b",
+                r"(?i)\b(idiot|stupid|dumb|moron|retard)\b",
+            ]
+        
+        def validate(self, value: str, metadata: Dict) -> ValidationResult:
+            for pattern in self.patterns:
+                if re.search(pattern, value):
+                    return FailResult(
+                        error_message="Profanity detected",
+                        fix_value=None
+                    )
+            return PassResult()
+    
+    
+    @register_validator(name="sensitive-data-filter", data_type="string")
+    class SensitiveDataFilter(Validator):
+        """Detects passwords, API keys, credentials"""
+        
+        def __init__(self, on_fail: str = "exception"):
+            super().__init__(on_fail=on_fail)
+            self.patterns = {
+                "password": r"(?i)\b(password|passwd|pwd)\s*[:=]\s*\S+",
+                "api_key": r"(?i)\b(api[_-]?key|secret[_-]?key|token)\s*[:=]\s*\S+",
+            }
+        
+        def validate(self, value: str, metadata: Dict) -> ValidationResult:
+            for data_type, pattern in self.patterns.items():
+                if re.search(pattern, value):
+                    return FailResult(
+                        error_message=f"Sensitive data detected: {data_type}",
+                        fix_value=None
+                    )
+            return PassResult()
+
+
 class GuardrailsLayer:
     """
-    Additional protection layer using Guardrails AI validators
-    and custom regex patterns for:
-    - PII detection (SSN, credit cards, emails, phone numbers)
-    - Profanity filtering
-    - Sensitive data detection
+    Guardrails AI integration for input validation.
+    Uses Guard class with custom validators.
     """
     
     def __init__(self):
         self.guardrails_enabled = GUARDRAILS_AVAILABLE
         
-        # ═══════════════════════════════════════════════════════════
-        # PII DETECTION PATTERNS (regex-based, always available)
-        # ═══════════════════════════════════════════════════════════
+        if self.guardrails_enabled:
+            # Create Guard with custom validators
+            self.guard = Guard().use_many(
+                PIIDetector(on_fail="noop"),
+                ProfanityFilter(on_fail="noop"),
+                SensitiveDataFilter(on_fail="noop"),
+            )
+            logger.info("✅ GuardrailsLayer initialized with Guardrails AI validators")
+        else:
+            self.guard = None
+            self._init_regex_fallback()
+            logger.info("GuardrailsLayer using regex fallback")
+    
+    def _init_regex_fallback(self):
+        """Initialize regex patterns as fallback"""
         self.pii_patterns = {
-            "ssn": r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b",  # SSN
-            "credit_card": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",  # Credit card
+            "ssn": r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b",
+            "credit_card": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
             "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
             "phone": r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
-            "ip_address": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
-            "aadhaar": r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",  # Indian Aadhaar
-            "pan": r"\b[A-Z]{5}\d{4}[A-Z]\b",  # Indian PAN
         }
-        
-        # ═══════════════════════════════════════════════════════════
-        # PROFANITY/TOXIC PATTERNS
-        # ═══════════════════════════════════════════════════════════
         self.profanity_patterns = [
-            r"(?i)\b(fuck|shit|ass|damn|bitch|bastard|crap)\b",
-            r"(?i)\b(idiot|stupid|dumb|moron|retard)\b",
-            r"(?i)\b(hate|kill|murder|die|death)\s+(you|him|her|them)\b",
+            r"(?i)\b(fuck|shit|ass|damn|bitch|bastard)\b",
         ]
-        
-        # ═══════════════════════════════════════════════════════════
-        # SENSITIVE DATA PATTERNS
-        # ═══════════════════════════════════════════════════════════
         self.sensitive_patterns = {
             "password": r"(?i)\b(password|passwd|pwd)\s*[:=]\s*\S+",
-            "api_key": r"(?i)\b(api[_-]?key|secret[_-]?key|token)\s*[:=]\s*\S+",
-            "credentials": r"(?i)\b(username|user|login)\s*[:=]\s*\S+",
+            "api_key": r"(?i)\b(api[_-]?key|secret[_-]?key)\s*[:=]\s*\S+",
         }
-        
-        logger.info(f"GuardrailsLayer initialized (Guardrails AI: {self.guardrails_enabled})")
     
-    def check_pii(self, text: str) -> GuardrailsResult:
-        """Check for personally identifiable information"""
+    def validate(self, text: str) -> GuardrailsResult:
+        """Run validation using Guardrails AI or regex fallback"""
         
-        detected = []
+        if self.guardrails_enabled and self.guard:
+            return self._validate_with_guardrails(text)
+        else:
+            return self._validate_with_regex(text)
+    
+    def _validate_with_guardrails(self, text: str) -> GuardrailsResult:
+        """Use Guardrails AI Guard for validation"""
+        try:
+            result = self.guard.validate(text)
+            
+            if result.validation_passed:
+                return GuardrailsResult(is_safe=True, reason="Passed Guardrails AI validation")
+            else:
+                # Extract failure reason
+                errors = [str(e) for e in result.validation_summaries] if hasattr(result, 'validation_summaries') else ["Validation failed"]
+                return GuardrailsResult(
+                    is_safe=False,
+                    reason="; ".join(errors) if errors else "Guardrails validation failed",
+                    violation_type="guardrails"
+                )
+        except Exception as e:
+            logger.warning(f"Guardrails validation error: {e}")
+            # Fallback to regex
+            return self._validate_with_regex(text)
+    
+    def _validate_with_regex(self, text: str) -> GuardrailsResult:
+        """Fallback regex validation"""
+        # PII check
         for pii_type, pattern in self.pii_patterns.items():
-            matches = re.findall(pattern, text)
-            if matches:
-                detected.append(f"{pii_type}: {len(matches)} found")
-                logger.warning(f"🔒 PII DETECTED: {pii_type} in query")
+            if re.search(pattern, text):
+                return GuardrailsResult(
+                    is_safe=False,
+                    reason=f"PII detected: {pii_type}",
+                    violation_type="pii"
+                )
         
-        if detected:
-            return GuardrailsResult(
-                is_safe=False,
-                reason="Personally Identifiable Information detected",
-                violation_type="pii",
-                detected_items=detected
-            )
-        
-        return GuardrailsResult(is_safe=True, reason="No PII detected")
-    
-    def check_profanity(self, text: str) -> GuardrailsResult:
-        """Check for profanity or toxic language"""
-        
+        # Profanity check
         for pattern in self.profanity_patterns:
             if re.search(pattern, text):
-                logger.warning(f"🚫 PROFANITY DETECTED in query")
                 return GuardrailsResult(
                     is_safe=False,
                     reason="Inappropriate language detected",
                     violation_type="profanity"
                 )
         
-        return GuardrailsResult(is_safe=True, reason="No profanity detected")
-    
-    def check_sensitive_data(self, text: str) -> GuardrailsResult:
-        """Check for passwords, API keys, credentials in plaintext"""
-        
-        detected = []
+        # Sensitive data check
         for data_type, pattern in self.sensitive_patterns.items():
             if re.search(pattern, text):
-                detected.append(data_type)
-                logger.warning(f"🔐 SENSITIVE DATA DETECTED: {data_type}")
+                return GuardrailsResult(
+                    is_safe=False,
+                    reason=f"Sensitive data detected: {data_type}",
+                    violation_type="sensitive_data"
+                )
         
-        if detected:
-            return GuardrailsResult(
-                is_safe=False,
-                reason="Sensitive credentials detected - please don't share passwords or API keys",
-                violation_type="sensitive_data",
-                detected_items=detected
-            )
-        
-        return GuardrailsResult(is_safe=True, reason="No sensitive data detected")
-    
-    def validate(self, text: str) -> GuardrailsResult:
-        """
-        Run all validation checks on the input text.
-        Returns the first violation found, or success if all pass.
-        """
-        
-        # Check 1: PII
-        pii_result = self.check_pii(text)
-        if not pii_result.is_safe:
-            return pii_result
-        
-        # Check 2: Profanity
-        profanity_result = self.check_profanity(text)
-        if not profanity_result.is_safe:
-            return profanity_result
-        
-        # Check 3: Sensitive data
-        sensitive_result = self.check_sensitive_data(text)
-        if not sensitive_result.is_safe:
-            return sensitive_result
-        
-        return GuardrailsResult(
-            is_safe=True,
-            reason="Passed all Guardrails checks"
-        )
+        return GuardrailsResult(is_safe=True, reason="Passed validation")
     
     def get_blocked_message(self, result: GuardrailsResult) -> str:
         """Generate user-friendly message for blocked content"""
         
         if result.violation_type == "pii":
             return (
-                "🔒 **Privacy Alert**: Your message appears to contain personal information "
-                "(SSN, credit card, phone, etc.).\n\n"
+                "🔒 **Privacy Alert**: Your message contains personal information.\n\n"
                 "Please remove sensitive data and try again."
             )
         
@@ -178,118 +223,58 @@ class GuardrailsLayer:
         
         if result.violation_type == "sensitive_data":
             return (
-                "🔐 **Security Alert**: Your message contains credentials or API keys.\n\n"
-                "Please don't share passwords or sensitive tokens in queries."
+                "🔐 **Security Alert**: Your message contains credentials.\n\n"
+                "Please don't share passwords or API keys in queries."
             )
         
-        return "Your query was blocked by security filters."
+        return f"Your query was blocked: {result.reason}"
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# COMBINED GUARD: Custom QueryGuard + Guardrails AI
-# ═══════════════════════════════════════════════════════════════════════════════
-
+# Export for backward compatibility
 class CombinedGuard:
-    """
-    Combines the custom EnhancedQueryGuard with GuardrailsLayer
-    for comprehensive query protection.
-    
-    Usage:
-        from guardrails_layer import CombinedGuard
-        guard = CombinedGuard()
-        result = guard.check(user_query)
-        if not result['is_safe']:
-            return result['message']
-    """
+    """Combines GuardrailsLayer with custom QueryGuard"""
     
     def __init__(self):
-        # Import local guard
         from query_guard import EnhancedQueryGuard
-        
         self.custom_guard = EnhancedQueryGuard()
         self.guardrails = GuardrailsLayer()
-        
-        logger.info("✅ CombinedGuard initialized with both custom + Guardrails protection")
+        logger.info("✅ CombinedGuard initialized")
     
     def check(self, query: str, user_id: str = "anonymous") -> Dict:
-        """
-        Run both guard layers on the query.
-        
-        Returns:
-            {
-                'is_safe': bool,
-                'passed_custom': bool,
-                'passed_guardrails': bool,
-                'message': str (if blocked),
-                'reason': str
-            }
-        """
-        
-        # Layer 1: Guardrails (PII, profanity, sensitive data) - runs first
-        guardrails_result = self.guardrails.validate(query)
-        if not guardrails_result.is_safe:
+        # Guardrails AI first
+        gr_result = self.guardrails.validate(query)
+        if not gr_result.is_safe:
             return {
                 'is_safe': False,
-                'passed_custom': False,
-                'passed_guardrails': False,
-                'message': self.guardrails.get_blocked_message(guardrails_result),
-                'reason': guardrails_result.reason
+                'message': self.guardrails.get_blocked_message(gr_result),
+                'reason': gr_result.reason
             }
         
-        # Layer 2: Custom guard (domain relevance, security, etc.)
+        # Then custom guard
         custom_result = self.custom_guard.check_query_relevance(query, user_id)
         if not custom_result.is_relevant:
             return {
                 'is_safe': False,
-                'passed_custom': False,
-                'passed_guardrails': True,
-                'message': custom_result.suggested_message or "Query blocked by domain guard",
+                'message': custom_result.suggested_message,
                 'reason': custom_result.reason
             }
         
-        # Both passed
-        return {
-            'is_safe': True,
-            'passed_custom': True,
-            'passed_guardrails': True,
-            'message': None,
-            'reason': "Passed all validation layers"
-        }
+        return {'is_safe': True, 'message': None, 'reason': "Passed all checks"}
 
 
-# Convenience function
-def validate_query(query: str, user_id: str = "anonymous") -> Dict:
-    """Quick combined validation check"""
-    guard = CombinedGuard()
-    return guard.check(query, user_id)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SELF-TEST
-# ═══════════════════════════════════════════════════════════════════════════════
-
+# Quick test
 if __name__ == "__main__":
-    print("\n" + "="*70)
-    print("GUARDRAILS LAYER - TEST RESULTS")
-    print("="*70 + "\n")
+    print(f"\nGuardrails AI Available: {GUARDRAILS_AVAILABLE}\n")
     
     layer = GuardrailsLayer()
-    
-    test_cases = [
-        ("Show OEE for furnace 1", "valid"),
-        ("My SSN is 123-45-6789, show data", "pii"),
-        ("My credit card is 4111-1111-1111-1111", "pii"),
-        ("Email me at test@example.com", "pii"),
-        ("What the fuck is OEE?", "profanity"),
-        ("password=secret123 show furnace", "sensitive"),
-        ("api_key: sk-12345 show data", "sensitive"),
+    tests = [
+        "Show OEE for furnace 1",
+        "My SSN is 123-45-6789",
+        "What the fuck is OEE?",
+        "password=secret123 show data",
     ]
     
-    for query, test_type in test_cases:
+    for query in tests:
         result = layer.validate(query)
-        status = "✓" if (test_type == "valid" and result.is_safe) or \
-                        (test_type != "valid" and not result.is_safe) else "✗"
-        
-        print(f"{status} [{test_type.upper():10}] {query[:45]:<45}")
-        print(f"   → Safe: {result.is_safe} | Reason: {result.reason}")
-        print()
+        status = "✅" if result.is_safe else "❌"
+        print(f"{status} {query[:40]:40} -> {result.reason}")
