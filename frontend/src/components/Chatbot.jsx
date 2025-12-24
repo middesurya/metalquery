@@ -8,7 +8,7 @@ const NLP_API_URL = process.env.REACT_APP_NLP_API_URL || 'http://localhost:8001'
  * ChatMessage Component
  * Renders a single chat message with appropriate styling
  */
-const ChatMessage = ({ message, isUser }) => {
+const ChatMessage = ({ message, isUser, onEdit }) => {
     return (
         <div className={`chat-message ${isUser ? 'user' : 'bot'}`}>
             <div className="message-avatar">
@@ -17,6 +17,25 @@ const ChatMessage = ({ message, isUser }) => {
             <div className="message-content">
                 <div className="message-bubble">
                     {message.text}
+                    {isUser && onEdit && (
+                        <button
+                            className="edit-message-btn"
+                            onClick={() => onEdit(message.id, message.text)}
+                            title="Edit this question"
+                            style={{
+                                marginLeft: '10px',
+                                padding: '4px 8px',
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                color: '#fff'
+                            }}
+                        >
+                            ✏️ Edit
+                        </button>
+                    )}
                 </div>
                 {message.sql && (
                     <div className="message-sql">
@@ -89,7 +108,7 @@ const Chatbot = () => {
     const [messages, setMessages] = useState([
         {
             id: 1,
-            text: "Hello! I'm your Metallurgy Database Assistant. Ask me anything about materials, properties, and specifications. For example: 'What steel has the highest tensile strength?' or 'Show me aluminum alloys'.",
+            text: "Hello! I'm your IGNIS Manufacturing Assistant. Ask me about furnace performance, KPIs, production data, or BRD documentation. For example: 'Show OEE for furnace 1 last week' or 'What is the EHS reporting process?'",
             isUser: false,
             timestamp: new Date().toISOString()
         }
@@ -97,6 +116,7 @@ const Chatbot = () => {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(true);
+    const [editingMessageId, setEditingMessageId] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -186,15 +206,45 @@ const Chatbot = () => {
         }
     };
 
-    /**
-     * Quick suggestion buttons - Metallurgy focused
-     */
     const suggestions = [
-        "What steel has highest strength?",
-        "Show aluminum alloys",
-        "Compare hardness of steels",
-        "Find materials with density < 3000"
+        "Show OEE for furnace 1 last week",
+        "What is the average efficiency by shift?",
+        "List production output for today",
+        "What is the EHS incident reporting process?"
     ];
+
+    /**
+     * Edit a previous user message
+     */
+    const handleEditMessage = (messageId, messageText) => {
+        setEditingMessageId(messageId);
+        setInputValue(messageText);
+        inputRef.current?.focus();
+    };
+
+    /**
+     * Cancel editing
+     */
+    const handleCancelEdit = () => {
+        setEditingMessageId(null);
+        setInputValue('');
+    };
+
+    /**
+     * Submit edited message
+     */
+    const handleSubmitEdit = async () => {
+        if (!inputValue.trim() || isLoading) return;
+
+        // Remove old messages from the edited one onwards
+        const editIndex = messages.findIndex(m => m.id === editingMessageId);
+        if (editIndex !== -1) {
+            setMessages(prev => prev.slice(0, editIndex));
+        }
+
+        setEditingMessageId(null);
+        await sendMessage();
+    };
 
     return (
         <div className={`chatbot-container ${isOpen ? 'open' : 'closed'}`}>
@@ -215,7 +265,7 @@ const Chatbot = () => {
                         <div className="header-info">
                             <span className="header-icon">🔩</span>
                             <div>
-                                <h3>Metallurgy Assistant</h3>
+                                <h3>IGNIS Assistant</h3>
                                 <span className="status online">Online</span>
                             </div>
                         </div>
@@ -228,6 +278,7 @@ const Chatbot = () => {
                                 key={msg.id}
                                 message={msg}
                                 isUser={msg.isUser}
+                                onEdit={msg.isUser ? handleEditMessage : null}
                             />
                         ))}
                         {isLoading && <TypingIndicator />}
@@ -263,16 +314,25 @@ const Chatbot = () => {
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ask about materials..."
+                            placeholder="Ask about furnace, OEE, production..."
                             disabled={isLoading}
                         />
                         <button
-                            onClick={sendMessage}
+                            onClick={editingMessageId ? handleSubmitEdit : sendMessage}
                             disabled={!inputValue.trim() || isLoading}
                             className="send-button"
                         >
-                            {isLoading ? '...' : '➤'}
+                            {isLoading ? '...' : editingMessageId ? '✓' : '➤'}
                         </button>
+                        {editingMessageId && (
+                            <button
+                                onClick={handleCancelEdit}
+                                className="cancel-button"
+                                style={{ marginLeft: '5px', background: '#666' }}
+                            >
+                                ✕
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

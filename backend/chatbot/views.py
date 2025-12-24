@@ -359,6 +359,25 @@ def chat(request):
         logger.info(f"Query type: {query_type}")
         
         # ============================================
+        # Handle BLOCKED Queries (Off-topic/Harmful)
+        # ============================================
+        if query_type == 'blocked':
+            # Query Guard blocked this - return the helpful message
+            response_text = nlp_data.get('response', 'I can only help with manufacturing data queries.')
+            
+            logger.info(f"Query blocked by guard: {question[:50]}...")
+            
+            return JsonResponse({
+                'success': True,
+                'query_type': 'blocked',
+                'response': response_text,
+                'sources': [],
+                'sql': None,
+                'results': [],
+                'row_count': 0
+            })
+        
+        # ============================================
         # Handle BRD (Documentation) Queries
         # ============================================
         if query_type == 'brd':
