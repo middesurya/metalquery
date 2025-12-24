@@ -99,6 +99,33 @@ const SQLDisplay = ({ sql }) => {
 };
 
 /**
+ * Score Badge Component
+ */
+const ScoreBadge = ({ label, score }) => {
+    if (score === undefined || score === null) return null;
+
+    let color = '#4caf50'; // Green
+    if (score < 50) color = '#f44336'; // Red
+    else if (score < 80) color = '#ff9800'; // Orange
+
+    return (
+        <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: '11px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            padding: '2px 8px',
+            borderRadius: '12px',
+            border: `1px solid ${color}`,
+            color: '#ccc'
+        }}>
+            <span style={{ marginRight: '4px', color: '#888' }}>{label}:</span>
+            <span style={{ color: color, fontWeight: 'bold' }}>{score}%</span>
+        </div>
+    );
+};
+
+/**
  * Chat Message Component
  */
 const ChatMessage = ({ message, isUser }) => {
@@ -123,6 +150,12 @@ const ChatMessage = ({ message, isUser }) => {
                 <div className="message-time">
                     {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
+                {!isUser && message.confidence_score !== undefined && (
+                    <div className="message-scores" style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                        <ScoreBadge label="Confidence" score={message.confidence_score} />
+                        <ScoreBadge label="Relevance" score={message.relevance_score} />
+                    </div>
+                )}
             </div>
             {isUser && (
                 <div className="message-avatar user-avatar">
@@ -232,9 +265,12 @@ function App() {
                     ? data.response
                     : `Sorry, I couldn't process that: ${data.error}`,
                 isUser: false,
+                isUser: false,
                 sql: data.sql,
                 results: data.results,
                 row_count: data.row_count,
+                confidence_score: data.confidence_score,
+                relevance_score: data.relevance_score,
                 timestamp: new Date().toISOString()
             };
 

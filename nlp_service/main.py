@@ -24,6 +24,7 @@ from schema_loader import schema_loader
 # ✅ NEW ENHANCED IMPORTS
 from prompts_v2 import build_prompt_with_schema, build_prompt_debug, SchemaAnalyzer
 from diagnostic import SQLDiagnostic
+from accuracy_scorer import AccuracyScorer
 
 # ✅ BRD RAG IMPORTS
 from brd_rag import brd_handler
@@ -47,7 +48,9 @@ app.add_middleware(
 )
 
 guardrails = SQLGuardrails()
+guardrails = SQLGuardrails()
 diagnostic = None
+accuracy_scorer = AccuracyScorer()
 brd_initialized = False
 
 # ============================================================
@@ -65,6 +68,8 @@ class GenerateSQLResponse(BaseModel):
     tables_used: Optional[List[str]] = None
     explanation: Optional[str] = None
     validation_warnings: Optional[List[str]] = None
+    confidence_score: Optional[int] = None
+    relevance_score: Optional[int] = None
 
 class FormatResponseRequest(BaseModel):
     question: str
@@ -300,13 +305,77 @@ SQL:"""
         
         tables_used = list(guardrails._extract_tables(generated_sql))
         logger.info(f"✓ Tables: {tables_used}")
+
+        # ════════════════════════════════════════════════════════
+        # STEP 6: Accuracy Scoring & Active Self-Correction
+        # ════════════════════════════════════════════════════════
         
+        # Initial scoring
+        relevance_score, relevance_reason = await accuracy_scorer.calculate_relevance(request.question, generated_sql)
+        confidence_score = accuracy_scorer.calculate_confidence(diag)
+        
+        MAX_RELEVANCE_RETRIES = 2
+        retry_count = 0
+        
+        # 🔄 RELEVANCE RETRY LOOP
+        while relevance_score < 70 and retry_count < MAX_RELEVANCE_RETRIES:
+            retry_count += 1
+            logger.warning(f"⚠ Low Relevance ({relevance_score}). Retrying ({retry_count}/{MAX_RELEVANCE_RETRIES}). Reason: {relevance_reason}")
+            
+            try:
+                # Feedback Prompt for the LLM
+                feedback_prompt = f"""You are fixing a bad SQL query.
+                
+User Question: "{request.question}"
+Your Previous SQL: "{generated_sql}"
+Quality Score: {relevance_score}/100
+Feedback: {relevance_reason}
+
+TASK: Generate a CORRECTED SQL query that better answers the user's question.
+Schema: {schema_loader.get_schema_context(tables=request.tables)}
+
+Return ONLY the SQL query. No explanation.
+"""
+                # Invoke LLM for correction
+                response = llm.invoke([HumanMessage(content=feedback_prompt)])
+                corrected_sql = clean_generated_sql(response.content.strip())
+                
+                if corrected_sql and corrected_sql.upper().startswith("SELECT"):
+                    # Validate correction syntax
+                    new_diag = diagnostic.diagnose_query(request.question, corrected_sql)
+                    if new_diag['valid']:
+                        # Adoption: Update generated_sql and re-score
+                        generated_sql = corrected_sql
+                        diag = new_diag
+                        
+                        # Re-calculate scores
+                        relevance_score, relevance_reason = await accuracy_scorer.calculate_relevance(request.question, generated_sql)
+                        confidence_score = accuracy_scorer.calculate_confidence(diag)
+                        
+                        logger.info(f"✓ Correction adopted. New Score: {relevance_score}")
+                    else:
+                        logger.warning("Correction was syntactically invalid. Ignoring.")
+            except Exception as e:
+                logger.error(f"Relevance retry failed: {e}")
+                break
+
+        logger.info(f"📊 Final Scores -> Confidence: {confidence_score}, Relevance: {relevance_score}")
+
+        # Final decision logic
+        if relevance_score < 50:
+             logger.warning(f"⚠ Final Relevance too low ({relevance_score}). Flagging.")
+             if not validation_warnings:
+                 validation_warnings = []
+             validation_warnings.append(f"⚠ Low Quality Warning: The AI is only {relevance_score}% confident this answers your specific question.")
+
         return GenerateSQLResponse(
             success=True,
             sql=generated_sql,
             tables_used=tables_used,
-            explanation=f"Generated with {settings.model_name} + schema analysis",
-            validation_warnings=validation_warnings if validation_warnings else None
+            explanation=f"Generated with {settings.model_name} + active self-correction (Retries: {retry_count})",
+            validation_warnings=validation_warnings if validation_warnings else None,
+            confidence_score=confidence_score,
+            relevance_score=relevance_score
         )
         
     except HTTPException:
@@ -367,7 +436,10 @@ class HybridChatResponse(BaseModel):
     results: Optional[List[Any]] = None
     sources: Optional[List[str]] = None
     error: Optional[str] = None
+    error: Optional[str] = None
     routing_confidence: Optional[float] = None
+    confidence_score: Optional[int] = None
+    relevance_score: Optional[int] = None
 
 @app.post("/api/v1/chat", response_model=HybridChatResponse)
 async def hybrid_chat(request: HybridChatRequest):
@@ -425,7 +497,9 @@ async def hybrid_chat(request: HybridChatRequest):
                 results=None,  # Results come from Django after execution
                 sources=sql_response.tables_used,
                 error=sql_response.error if not sql_response.success else None,
-                routing_confidence=confidence
+                routing_confidence=confidence,
+                confidence_score=sql_response.confidence_score,
+                relevance_score=sql_response.relevance_score
             )
         
         # Handle BRD queries

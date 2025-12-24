@@ -361,6 +361,29 @@ STRICT RULES:
 
 ════════════════════════════════════════════════════════════════════════════════════
 
+⚠️ CRITICAL: VARCHAR COLUMN TYPES IN ALL KPI TABLES ⚠️
+
+The following columns are VARCHAR (text) NOT INTEGER across ALL 20 KPI tables.
+You MUST use STRING QUOTES when filtering these columns:
+
+  COLUMN NAME      │ CORRECT ✅                    │ WRONG ❌
+  ─────────────────┼──────────────────────────────┼─────────────────────
+  shift_id         │ WHERE shift_id = '4'         │ WHERE shift_id = 4
+                   │ WHERE shift_id IN ('4','12') │ WHERE shift_id IN (4,12)
+  ─────────────────┼──────────────────────────────┼─────────────────────
+  machine_id       │ WHERE machine_id = 'FURNACE' │ WHERE machine_id = FURNACE
+                   │ WHERE machine_id IN ('A','B')│ WHERE machine_id IN (A,B)
+  ─────────────────┼──────────────────────────────┼─────────────────────
+  product_type_id  │ WHERE product_type_id='M004' │ WHERE product_type_id=M004
+                   │ WHERE product_type_id IN (...│ ...
+
+INTEGER columns (use numbers WITHOUT quotes):
+  - furnace_no: WHERE furnace_no = 1, furnace_no IN (1, 888)
+  - plant_id: WHERE plant_id = 1
+  - record_id: WHERE record_id = 123
+
+════════════════════════════════════════════════════════════════════════════════════
+
 AGGREGATION RULES:
 
 WHEN TO USE AGGREGATION:
@@ -627,6 +650,114 @@ FEW_SHOT_EXAMPLES = [
     
     {"q": "Total and average yield for Furnace 2 in January", 
      "sql": "SELECT SUM(yield_percentage) as total_yield, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE furnace_no = 2 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+    
+    # ========== VARCHAR COLUMN EXAMPLES (CRITICAL - applies to ALL 29 tables) ==========
+    # shift_id is VARCHAR - ALWAYS use string quotes '4', '12', '20' NOT integers
+    {"q": "OEE for shift 4",
+     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' ORDER BY date DESC LIMIT 100"},
+    
+    {"q": "Compare downtime between shifts 4, 12, and 20",
+     "sql": "SELECT shift_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE shift_id IN ('4', '12', '20') GROUP BY shift_id ORDER BY total_downtime DESC"},
+    
+    {"q": "Which shift has highest yield",
+     "sql": "SELECT shift_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY shift_id ORDER BY avg_yield DESC LIMIT 1"},
+    
+    {"q": "Average OEE per shift",
+     "sql": "SELECT shift_id, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY shift_id ORDER BY avg_oee DESC"},
+    
+    {"q": "Energy used by shift 12 last week",
+     "sql": "SELECT date, SUM(energy_used) as total_energy FROM kpi_energy_used_data WHERE shift_id = '12' AND date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date DESC"},
+    
+    {"q": "Defect rate for shift 20",
+     "sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE shift_id = '20' ORDER BY date DESC LIMIT 100"},
+    
+    # machine_id is VARCHAR - ALWAYS use string quotes 'FURNACE', 'CAST_BAY', etc.
+    {"q": "OEE for machine FURNACE",
+     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
+    
+    {"q": "Compare downtime between FURNACE and ELECTROD machines",
+     "sql": "SELECT machine_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE machine_id IN ('FURNACE', 'ELECTROD') GROUP BY machine_id ORDER BY total_downtime DESC"},
+    
+    {"q": "Which machine has highest efficiency",
+     "sql": "SELECT machine_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data GROUP BY machine_id ORDER BY avg_efficiency DESC LIMIT 1"},
+    
+    {"q": "Average yield per machine",
+     "sql": "SELECT machine_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY machine_id ORDER BY avg_yield DESC"},
+    
+    {"q": "MTBF for machine CAST_BAY",
+     "sql": "SELECT date, mtbf_hours FROM kpi_mean_time_between_failures_data WHERE machine_id = 'CAST_BAY' ORDER BY date DESC LIMIT 100"},
+    
+    {"q": "Top 5 machines by energy consumption",
+     "sql": "SELECT machine_id, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY machine_id ORDER BY total_energy DESC LIMIT 5"},
+    
+    # product_type_id is VARCHAR - ALWAYS use string quotes 'M004', 'MET30', etc.
+    {"q": "OEE for product M004",
+     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE product_type_id = 'M004' ORDER BY date DESC LIMIT 100"},
+    
+    {"q": "Compare yield between MET30 and MET32",
+     "sql": "SELECT product_type_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE product_type_id IN ('MET30', 'MET32') GROUP BY product_type_id ORDER BY avg_yield DESC"},
+    
+    {"q": "Which product has highest defect rate",
+     "sql": "SELECT product_type_id, AVG(defect_rate) as avg_defect_rate FROM kpi_defect_rate_data GROUP BY product_type_id ORDER BY avg_defect_rate DESC LIMIT 1"},
+    
+    {"q": "Downtime by product type",
+     "sql": "SELECT product_type_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY product_type_id ORDER BY total_downtime DESC"},
+    
+    # Combined filters (shift + machine + product) - ALL use string quotes
+    {"q": "OEE for shift 4 on machine FURNACE",
+     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' AND machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
+    
+    {"q": "Downtime for product MET30 in shift 12",
+     "sql": "SELECT date, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE product_type_id = 'MET30' AND shift_id = '12' GROUP BY date ORDER BY date DESC"},
+    
+    {"q": "Compare efficiency between shifts for machine ELECTROD",
+     "sql": "SELECT shift_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data WHERE machine_id = 'ELECTROD' GROUP BY shift_id ORDER BY avg_efficiency DESC"},
+    
+    # ========== GENERIC KPI QUERY PATTERNS (Works for all 20 KPI tables) ==========
+    # Average/Total by date
+    {"q": "Average OEE per day",
+     "sql": "SELECT date, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY date ORDER BY date DESC"},
+    
+    {"q": "Total downtime per day",
+     "sql": "SELECT date, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY date ORDER BY date DESC"},
+    
+    # Records above/below threshold
+    {"q": "Show OEE records above 90",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE oee_percentage > 90 ORDER BY oee_percentage DESC LIMIT 100"},
+    
+    {"q": "Downtime events above 10 hours",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data WHERE downtime_hours > 10 ORDER BY downtime_hours DESC LIMIT 100"},
+    
+    {"q": "Defect rate above 5 percent",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, defect_rate FROM kpi_defect_rate_data WHERE defect_rate > 5 ORDER BY defect_rate DESC LIMIT 100"},
+    
+    # Min/Max queries
+    {"q": "Highest OEE recorded",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data ORDER BY oee_percentage DESC LIMIT 1"},
+    
+    {"q": "Lowest yield recorded",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, yield_percentage FROM kpi_yield_data ORDER BY yield_percentage ASC LIMIT 1"},
+    
+    {"q": "Max downtime event",
+     "sql": "SELECT date, shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data ORDER BY downtime_hours DESC LIMIT 1"},
+    
+    # Statistics (min, max, avg)
+    {"q": "Min, max, and average OEE",
+     "sql": "SELECT MIN(oee_percentage) as min_oee, MAX(oee_percentage) as max_oee, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data"},
+    
+    {"q": "Statistics for downtime",
+     "sql": "SELECT MIN(downtime_hours) as min_downtime, MAX(downtime_hours) as max_downtime, AVG(downtime_hours) as avg_downtime, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data"},
+    
+    # By specific date
+    {"q": "OEE on 2024-01-07",
+     "sql": "SELECT shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date = '2024-01-07' ORDER BY oee_percentage DESC"},
+    
+    {"q": "Downtime on 2024-01-08",
+     "sql": "SELECT shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data WHERE date = '2024-01-08' ORDER BY downtime_hours DESC"},
+    
+    # Date range queries
+    {"q": "OEE between January 7 and January 9 2024",
+     "sql": "SELECT date, shift_id, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date BETWEEN '2024-01-07' AND '2024-01-09' ORDER BY date, oee_percentage DESC"},
     
     # ========== ERROR EXAMPLES ==========
     {"q": "production",
