@@ -10,8 +10,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from pathlib import Path
 import logging
 
 from langchain_groq import ChatGroq
@@ -32,6 +34,9 @@ from query_router import route_query, QueryRouter
 from query_guard import QueryGuard, IGNIS_KEYWORDS
 from guardrails_layer import CombinedGuard, GuardrailsLayer
 
+# ✅ RATE LIMITING
+from rate_limiter import get_rate_limiter, check_rate_limit, record_usage, RateLimitConfig
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -48,6 +53,11 @@ app.add_middleware(
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
+
+# Mount static files for BRD images
+BRD_IMAGES_DIR = Path(__file__).parent / "brd_images"
+BRD_IMAGES_DIR.mkdir(exist_ok=True)
+app.mount("/api/brd-images", StaticFiles(directory=str(BRD_IMAGES_DIR)), name="brd_images")
 
 guardrails = SQLGuardrails()
 diagnostic = None
@@ -93,12 +103,13 @@ class SchemaInfoResponse(BaseModel):
 # LLM
 # ============================================================
 
-def get_llm():
+def get_llm(max_tokens: int = None):
+    """Get LLM with configurable max tokens."""
     return ChatGroq(
         api_key=settings.groq_api_key,
         model=settings.model_name,
         temperature=0,
-        max_tokens=512,
+        max_tokens=max_tokens or settings.max_output_tokens,
     )
 
 # ============================================================
@@ -163,6 +174,11 @@ async def health_check():
         "backend_url": settings.django_api_url,
         "schema_loaded": len(schema_loader.get_table_names() or []) > 0
     }
+
+@app.get("/api/v1/rate-limit-status")
+async def rate_limit_status():
+    """Get current rate limit status and usage."""
+    return get_rate_limiter().get_stats()
 
 @app.get("/api/v1/schema", response_model=SchemaInfoResponse)
 async def get_schema():
@@ -253,18 +269,34 @@ Question: {request.question}
 SQL:"""
         
         # ════════════════════════════════════════════════════════
-        # STEP 2: Generate SQL
+        # STEP 2: Rate Limit Check + Generate SQL
         # ════════════════════════════════════════════════════════
         logger.info("🤖 Generating SQL...")
+        
+        # Estimate tokens and check rate limit
+        rate_limiter = get_rate_limiter()
+        estimated_input_tokens = rate_limiter.estimate_tokens(prompt)
+        can_proceed, rate_msg = rate_limiter.can_make_request(estimated_input_tokens + settings.max_output_tokens)
+        
+        if not can_proceed:
+            logger.warning(f"⚠️ Rate limit hit: {rate_msg}")
+            raise HTTPException(status_code=429, detail=rate_msg)
+        
         try:
             llm = get_llm()
             response = llm.invoke([HumanMessage(content=prompt)])
             raw_output = response.content.strip()
             logger.info(f"Raw: {raw_output[:80]}...")
             
+            # Record token usage
+            output_tokens = rate_limiter.estimate_tokens(raw_output)
+            record_usage(estimated_input_tokens, output_tokens)
+            
             generated_sql = clean_generated_sql(raw_output)
             logger.info(f"Generated: {generated_sql[:80]}...")
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"LLM error: {e}")
             raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
@@ -451,7 +483,7 @@ class HybridChatResponse(BaseModel):
     sql: Optional[str] = None
     results: Optional[List[Any]] = None
     sources: Optional[List[str]] = None
-    error: Optional[str] = None
+    images: Optional[List[Dict]] = None  # NEW: images from BRD documents
     error: Optional[str] = None
     routing_confidence: Optional[float] = None
     confidence_score: Optional[int] = None
@@ -566,9 +598,9 @@ async def hybrid_chat(request: HybridChatRequest):
                     routing_confidence=confidence
                 )
             
-            # Query BRD documents
+            # Query BRD documents (now returns images too)
             llm = get_llm()
-            brd_result = brd_handler.query(request.question, llm=llm, top_k=5)
+            brd_result = brd_handler.query(request.question, llm=llm, top_k=5, image_k=3)
             
             return HybridChatResponse(
                 success=brd_result["success"],
@@ -577,6 +609,7 @@ async def hybrid_chat(request: HybridChatRequest):
                 sql=None,
                 results=None,
                 sources=brd_result.get("sources", []),
+                images=brd_result.get("images", []),  # NEW: include images
                 error=brd_result.get("error"),
                 routing_confidence=confidence
             )
