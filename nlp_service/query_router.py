@@ -86,36 +86,81 @@ class QueryRouter:
         "furnace health", "performance", "throughput",
     }
     
-    # Keywords that suggest BRD/documentation queries
+    # Keywords that suggest BRD/documentation queries (from 33 BRD documents)
     BRD_KEYWORDS = {
-        # Process questions
+        # Process/Definition questions
         "how to", "how do", "what is the process", "what are the steps",
         "procedure", "workflow", "guidelines", "policy", "rule",
-        # Definitions & explanations (removed "what is the" - handled separately)
         "define", "definition", "meaning", "explain", "describe",
-        "what does", "what is a", "tell me about",
-        # Specific BRD concepts (high priority)
-        "what is ehs", "what is brd", "what is sop",
-        "ehs", "environment health safety", "incident reporting", "safety reporting",
-        # Requirements
-        "requirement", "specification", "brd", "document",
+        "what does", "tell me about", "how does",
+        
+        # BRD S013 - EHS (Incident Reporting)
+        "ehs", "incident", "incident reporting", "safety reporting",
+        "environment health safety", "environment health",
+        
+        # BRD S03 - System Config
+        "system config", "plant config", "furnace config",
+        "user access control", "access control", "roles", "users",
         "configure", "configuration", "setup", "setting",
-        # Roles and access
-        "role", "permission", "access", "user access", "who can",
-        # Reports structure (not data)
+        
+        # BRD S04 - Master Data
+        "master data", "material maintenance",
+        "furnace raw materials", "raw materials",
+        "additives", "byproducts", "by-products", "by products",
+        "wip", "work in progress",
+        "grading plan", "products",
+        
+        # BRD S05 - Core Process
+        "core process", "core process production",
+        
+        # BRD S06 - Reports (structure, not data)
         "report format", "report structure", "report fields",
-        # Master data concepts
-        "master data", "material maintenance", "grading plan",
-        # Lab analysis processes
-        "lab analysis", "spout analysis", "tap analysis", "raw material analysis",
-        # Log book processes
-        "log book", "tap hole log", "furnace bed", "downtime log",
+        "raw material consumption report", "consumption report",
+        "raw material analysis report", "size analysis report",
+        "spout analysis report", "tap analysis report",
+        "production report structure", "downtime analysis report",
+        "quality summary report",
+        
+        # BRD S08 - Lab Analysis
+        "lab analysis", "laboratory analysis",
+        "raw material analysis", "spout analysis", "tap analysis",
+        
+        # BRD S09 - Log Book
+        "log book", "logbook", "tap hole log", "tap hole",
+        "furnace downtime log", "furnace bed log", "bed log",
+        
+        # General BRD terms
+        "brd", "sop", "document", "requirement", "specification",
+        "who can", "permission", "role",
     }
     
-    # Concepts that are ALWAYS BRD (override SQL)
+    # Concepts that are ALWAYS BRD (override SQL) - "what is X" questions
     BRD_CONCEPTS = {
-        "ehs", "sop", "brd", "policy", "procedure", "guideline",
-        "workflow", "configuration", "requirement",
+        # General BRD terms
+        "ehs", "sop", "brd", "policy", "procedure", "guideline", "workflow",
+        "configuration", "requirement", "process",
+        
+        # Master Data concepts
+        "raw material", "raw materials", "additives", "byproducts", "by-products",
+        "wip", "work in progress", "grading plan", "material maintenance",
+        
+        # Lab Analysis concepts  
+        "lab analysis", "laboratory", "spout analysis", "tap analysis",
+        "raw material analysis", "size analysis",
+        
+        # Log Book concepts
+        "log book", "logbook", "tap hole log", "furnace bed", "downtime log",
+        "furnace downtime",
+        
+        # Report concepts
+        "consumption report", "production report", "quality summary",
+        "downtime analysis",
+        
+        # System Config concepts
+        "plant config", "furnace config", "user access", "access control", "roles",
+        
+        # EHS concepts
+        "incident reporting", "safety", "environment health",
     }
     
     @classmethod
@@ -131,20 +176,21 @@ class QueryRouter:
         """
         question_lower = question.lower().strip()
         
-        # ✅ PRIORITY CHECK 1: "what is <kpi metric>" patterns → SQL
+        # ✅ PRIORITY CHECK 1: "what is <BRD concept>" patterns → BRD (check FIRST!)
+        # BRD concepts are more specific, so check them before generic SQL metrics
+        if re.search(r'what (is|are|does|was|were)', question_lower):
+            for concept in cls.BRD_CONCEPTS:
+                if concept in question_lower:
+                    logger.info(f"Routing to BRD: 'what is' + concept '{concept}' detected")
+                    return "brd", 0.90
+        
+        # ✅ PRIORITY CHECK 2: "what is <kpi metric>" patterns → SQL
         # Examples: "what is the oee for furnace 1", "what is downtime last week"
         if re.search(r'what (is|are|was|were)', question_lower):
             for metric in cls.KPI_METRICS:
                 if metric in question_lower:
                     logger.info(f"Routing to SQL: 'what is' + KPI metric '{metric}' detected")
                     return "sql", 0.90
-        
-        # ✅ PRIORITY CHECK 2: "what is <concept>" patterns → BRD (only for non-metrics)
-        if re.match(r'^what (is|are|does) \w+\??$', question_lower):
-            # Short "what is X" questions are typically asking for definitions
-            for concept in cls.BRD_CONCEPTS:
-                if concept in question_lower:
-                    return "brd", 0.90
         
         sql_score = 0
         brd_score = 0

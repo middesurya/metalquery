@@ -214,10 +214,43 @@ class EnhancedQueryGuard:
         ]
         
         self.secondary_keywords = [
+            # KPI & Performance
             "mtbf", "mttr", "mtbs", "fpy", "compliance", "utilization",
-            "tap", "cast", "tapping", "grading", "electrode",
-            "ehs", "brd", "sop", "process", "metric", "kpi",
             "today", "yesterday", "last week", "last month",
+            
+            # Core Process (from BRD S05.02)
+            "tap", "cast", "tapping", "grading", "electrode", "core process",
+            
+            # System Config (from BRD S03)
+            "plant config", "furnace config", "system config", "configuration",
+            "user access", "roles", "users", "access control",
+            
+            # Master Data (from BRD S04)
+            "master data", "material maintenance", "raw materials", "additives",
+            "byproducts", "by-products", "wip", "work in progress", 
+            "grading plan", "products", "material",
+            
+            # Reports (from BRD S06)
+            "report", "reports", "raw material consumption", "consumption",
+            "raw material analysis", "size analysis", "spout analysis",
+            "tap analysis", "production report", "downtime analysis",
+            "quality summary", "quality report",
+            
+            # Lab Analysis (from BRD S08)
+            "lab", "lab analysis", "laboratory", "analysis",
+            "spout", "spout analysis",
+            
+            # Log Book (from BRD S09)
+            "log", "log book", "logbook", "tap hole", "tap hole log",
+            "furnace downtime", "downtime log", "furnace bed", "bed log",
+            
+            # EHS (from BRD S013)
+            "ehs", "incident", "incident reporting", "safety", "environment",
+            "health safety", "environment health",
+            
+            # General BRD terms
+            "brd", "sop", "procedure", "workflow", "guideline", "process",
+            "metric", "kpi", "dashboard", "setup", "setting",
         ]
         
         # Typo variants for fuzzy matching

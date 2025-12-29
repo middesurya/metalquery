@@ -381,9 +381,10 @@ def chat(request):
         # Handle BRD (Documentation) Queries
         # ============================================
         if query_type == 'brd':
-            # BRD queries return response directly from NLP service
+            # BRD queries return response directly from NLP service (including images)
             response_text = nlp_data.get('response', 'No response from BRD documents.')
             sources = nlp_data.get('sources', [])
+            images = nlp_data.get('images', [])  # NEW: get images
             
             audit_logger.log_query(
                 client_ip, question, None, True,
@@ -396,6 +397,7 @@ def chat(request):
                 'query_type': 'brd',
                 'response': response_text,
                 'sources': sources,
+                'images': images,  # NEW: include images in response
                 'sql': None,
                 'results': [],
                 'row_count': 0
