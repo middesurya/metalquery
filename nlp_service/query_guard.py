@@ -19,79 +19,8 @@ from enum import Enum
 from collections import Counter
 import difflib
 
-# ✅ Import TABLE_SCHEMA to dynamically extract keywords from all 29 tables
-try:
-    from prompts_v2 import TABLE_SCHEMA
-except ImportError:
-    TABLE_SCHEMA = {}
 
 logger = logging.getLogger(__name__)
-
-
-def extract_schema_keywords() -> List[str]:
-    """Extract all keywords from TABLE_SCHEMA for domain validation."""
-    keywords = set()
-    for table_name, info in TABLE_SCHEMA.items():
-        # Add keywords defined for each table
-        if "keywords" in info:
-            keywords.update(info["keywords"])
-        # Add column names as keywords (useful for queries like "show cycle_time")
-        if "columns" in info:
-            for col in info["columns"]:
-                # Convert snake_case to space-separated words
-                keywords.add(col.replace("_", " "))
-                keywords.add(col)
-        # Add value column names
-        if "value_column" in info:
-            col = info["value_column"]
-            keywords.add(col.replace("_", " "))
-            keywords.add(col)
-    return list(keywords)
-
-
-def extract_brd_keywords() -> List[str]:
-    """Extract keywords from BRD PDF filenames dynamically."""
-    import os
-    keywords = set()
-
-    # BRD directory path
-    brd_dir = os.path.join(os.path.dirname(__file__), "brd")
-
-    if not os.path.exists(brd_dir):
-        return []
-
-    # Extract keywords from PDF filenames
-    for filename in os.listdir(brd_dir):
-        if filename.endswith(".pdf"):
-            # Remove extension and BRD prefix
-            name = filename.replace(".pdf", "").replace("BRD ", "").replace("BRD_", "")
-            # Remove version numbers like V2.0
-            name = re.sub(r'_?V\d+\.\d+', '', name)
-            # Remove section numbers like S04.01.01
-            name = re.sub(r'S\d+\.\d+(\.\d+)?_?', '', name)
-
-            # Split by underscores and add each part as keyword
-            parts = name.split("_")
-            for part in parts:
-                part = part.strip().lower()
-                if len(part) > 2:  # Skip very short parts
-                    keywords.add(part)
-                    # Also add space-separated version
-                    keywords.add(part.replace("-", " "))
-
-    # Add common BRD concept keywords
-    keywords.update([
-        "log book", "logbook", "tap hole", "furnace bed", "downtime log",
-        "incident", "incident reporting", "material maintenance",
-        "grading plan", "lab analysis", "spout analysis", "tap analysis",
-        "raw material", "user access", "roles", "permissions",
-        "plant config", "furnace config", "system config",
-        "report", "reports", "workflow", "screen", "list screen",
-        "wip", "byproducts", "additives", "products",
-        "configuration", "setup", "procedure", "guidelines",
-    ])
-
-    return list(keywords)
 
 
 class QueryRelevance(Enum):
@@ -251,18 +180,16 @@ class EnhancedQueryGuard:
         
         # ═══════════════════════════════════════════════════════════
         # MATH/ARITHMETIC PATTERNS (disguised with domain keywords)
-        # NOTE: Patterns must NOT match dates like 2024-01-07
         # ═══════════════════════════════════════════════════════════
         self.math_patterns = [
-            r"\d+\s*[\+\*\/\^]\s*\d+",  # 2+2, 3*4, etc. (NO minus - conflicts with dates)
-            r"\d+\s+\-\s+\d+",  # "5 - 3" with spaces (not "2024-01-07")
+            r"\d+\s*[\+\-\*\/\^]\s*\d+",  # 2+2, 10-5, 3*4, etc.
             r"(?i)\bsum of \d+ number",  # "sum of 10 numbers"
-            r"(?i)\b(add|subtract|multiply|divide|plus|minus)\b.*\d",  # Removed "times"
-            r"(?i)\bwhat is \d+\s*[\+\*\/]",  # "what is 2 +" (NO minus)
-            r"(?i)\bcalculate \d+\s*[\+\*\/]",  # "calculate 5 *" (NO minus)
-            r"(?i)\b\d+\s+(plus|minus|divided by)\s+\d+",  # "5 plus 3" with word operators
+            r"(?i)\b(add|subtract|multiply|divide|plus|minus|times)\b.*\d",
+            r"(?i)\bwhat is \d+\s*[\+\-\*\/]",  # "what is 2 +"
+            r"(?i)\bcalculate \d+\s*[\+\-\*\/]",  # "calculate 5 *"
+            r"(?i)\b\d+\s*(plus|minus|times|divided by)\s*\d+",
             r"(?i)\b(factorial|square root|sqrt|power of)\b",
-            r"(?i)\bsolve\s+\d+\s*[\+\-\*\/]",  # "solve 2+2" requires operator
+            r"(?i)\bsolve\s+\d",  # "solve 2+2"
         ]
         
         # ═══════════════════════════════════════════════════════════
@@ -279,43 +206,52 @@ class EnhancedQueryGuard:
         
         # ═══════════════════════════════════════════════════════════
         # DOMAIN KEYWORDS (manufacturing-specific)
-        # ✅ DYNAMICALLY LOADED from TABLE_SCHEMA (all 29 tables)
         # ═══════════════════════════════════════════════════════════
-
-        # Load keywords from schema
-        schema_keywords = extract_schema_keywords()
-
         self.primary_keywords = [
             "furnace", "oee", "efficiency", "production", "defect",
             "yield", "downtime", "quality", "output", "shift",
             "ignis", "mes", "equipment", "machine",
-            # Cycle Time KPI
-            "cycle", "cycle time", "slowest", "fastest",
-            # ✅ BRD concepts (high priority to prevent OFF-TOPIC blocking)
-            "log book", "logbook", "tap hole", "furnace bed", "incident",
-            "brd", "ehs", "sop", "procedure", "workflow", "process",
-            "grading", "lab analysis", "material maintenance",
         ]
-
+        
         self.secondary_keywords = [
+            # KPI & Performance
             "mtbf", "mttr", "mtbs", "fpy", "compliance", "utilization",
-            "tap", "cast", "tapping", "grading", "electrode",
-            "ehs", "brd", "sop", "process", "metric", "kpi",
             "today", "yesterday", "last week", "last month",
-            # Additional KPI terms
-            "energy", "rework", "safety", "incidents", "maintenance",
-            "capacity", "delivery", "first pass", "quantity",
+            
+            # Core Process (from BRD S05.02)
+            "tap", "cast", "tapping", "grading", "electrode", "core process",
+            
+            # System Config (from BRD S03)
+            "plant config", "furnace config", "system config", "configuration",
+            "user access", "roles", "users", "access control",
+            
+            # Master Data (from BRD S04)
+            "master data", "material maintenance", "raw materials", "additives",
+            "byproducts", "by-products", "wip", "work in progress", 
+            "grading plan", "products", "material",
+            
+            # Reports (from BRD S06)
+            "report", "reports", "raw material consumption", "consumption",
+            "raw material analysis", "size analysis", "spout analysis",
+            "tap analysis", "production report", "downtime analysis",
+            "quality summary", "quality report",
+            
+            # Lab Analysis (from BRD S08)
+            "lab", "lab analysis", "laboratory", "analysis",
+            "spout", "spout analysis",
+            
+            # Log Book (from BRD S09)
+            "log", "log book", "logbook", "tap hole", "tap hole log",
+            "furnace downtime", "downtime log", "furnace bed", "bed log",
+            
+            # EHS (from BRD S013)
+            "ehs", "incident", "incident reporting", "safety", "environment",
+            "health safety", "environment health",
+            
+            # General BRD terms
+            "brd", "sop", "procedure", "workflow", "guideline", "process",
+            "metric", "kpi", "dashboard", "setup", "setting",
         ]
-
-        # ✅ Merge schema keywords (covers ALL 29 tables automatically)
-        self.secondary_keywords.extend(schema_keywords)
-
-        # ✅ Merge BRD keywords (extracted from PDF filenames dynamically)
-        brd_keywords = extract_brd_keywords()
-        self.secondary_keywords.extend(brd_keywords)
-        logger.info(f"Loaded {len(brd_keywords)} BRD keywords dynamically")
-
-        self.secondary_keywords = list(set(self.secondary_keywords))  # Remove duplicates
         
         # Typo variants for fuzzy matching
         self.keyword_variants = {
@@ -505,16 +441,9 @@ class EnhancedQueryGuard:
     
     def _check_off_topic(self, query: str) -> Tuple[bool, Optional[GuardResult]]:
         """Detect general knowledge, chitchat, unrelated topics."""
-
+        
         query_lower = query.lower()
-
-        # ✅ FIRST: Check if query contains BRD/domain keywords - if so, skip off-topic check
-        # This prevents false positives like "log book" matching "book" pattern
-        matched_keywords = self._fuzzy_keyword_match(query)
-        if matched_keywords:
-            # Query has domain relevance, skip off-topic patterns
-            return False, None
-
+        
         # Check general knowledge patterns
         for pattern in self.general_knowledge_patterns:
             if re.search(pattern, query_lower):
@@ -719,20 +648,14 @@ class EnhancedQueryGuard:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Global guard instance for reuse
-# ✅ Reset on module reload to pick up new keywords
 _guard_instance = None
 
-def get_guard(force_refresh: bool = False) -> EnhancedQueryGuard:
+def get_guard() -> EnhancedQueryGuard:
     """Get singleton guard instance."""
     global _guard_instance
-    if _guard_instance is None or force_refresh:
+    if _guard_instance is None:
         _guard_instance = EnhancedQueryGuard()
-        logger.info("✅ QueryGuard instance created/refreshed")
     return _guard_instance
-
-# ✅ Force refresh on module load (for hot-reload support)
-_guard_instance = EnhancedQueryGuard()
-logger.info("✅ QueryGuard initialized on module load")
 
 
 def check_query(query: str, user_id: str = "anonymous") -> GuardResult:
@@ -753,8 +676,7 @@ def check_query_fast(query: str) -> GuardResult:
 QueryGuard = EnhancedQueryGuard
 
 # Export keywords for backward compatibility
-# ✅ Dynamically include all schema keywords
-_BASE_KEYWORDS = [
+IGNIS_KEYWORDS = [
     "furnace", "oee", "efficiency", "production", "defect",
     "yield", "downtime", "quality", "output", "shift",
     "ignis", "mes", "equipment", "machine",
@@ -762,12 +684,7 @@ _BASE_KEYWORDS = [
     "tap", "cast", "tapping", "grading", "electrode",
     "ehs", "brd", "sop", "process", "metric", "kpi",
     "today", "yesterday", "last week", "last month",
-    # Cycle Time and additional KPIs
-    "cycle", "cycle time", "slowest", "fastest",
-    "energy", "rework", "safety", "incidents", "maintenance",
-    "capacity", "delivery", "first pass", "quantity",
 ]
-IGNIS_KEYWORDS = list(set(_BASE_KEYWORDS + extract_schema_keywords()))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

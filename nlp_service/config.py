@@ -25,10 +25,16 @@ class Settings(BaseSettings):
     # Groq API Configuration (REQUIRED - Get key from https://console.groq.com/keys)
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     model_name: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    
+    # Rate Limiting (Groq free tier: 30 req/min, 6000 tokens/min)
+    max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "25"))
+    max_tokens_per_minute: int = int(os.getenv("MAX_TOKENS_PER_MINUTE", "5000"))
+    max_output_tokens: int = int(os.getenv("MAX_OUTPUT_TOKENS", "256"))
 
     class Config:
         env_file = ".env"
         extra = "allow"
+
 
 
 settings = Settings()

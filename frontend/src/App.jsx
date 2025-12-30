@@ -188,6 +188,69 @@ const ScoreBadge = ({ label, score }) => {
 };
 
 /**
+ * Image Gallery Component for BRD Images
+ */
+const ImageGallery = ({ images }) => {
+    const [selectedImage, setSelectedImage] = useState(null);
+
+    if (!images || images.length === 0) return null;
+
+    // NLP service URL for images
+    const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
+
+    return (
+        <div className="image-gallery">
+            <div className="image-gallery-header">
+                <span className="gallery-icon">📷</span>
+                <span>Related Images ({images.length})</span>
+            </div>
+            <div className="image-grid">
+                {images.map((img, idx) => (
+                    <div
+                        key={idx}
+                        className="image-item"
+                        onClick={() => setSelectedImage(img)}
+                    >
+                        <img
+                            src={`${NLP_URL}${img.url}`}
+                            alt={`From ${img.source}`}
+                            loading="lazy"
+                        />
+                        <div className="image-caption">
+                            {img.source} (p.{img.page + 1})
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Lightbox Modal */}
+            {selectedImage && (
+                <div
+                    className="image-lightbox"
+                    onClick={() => setSelectedImage(null)}
+                >
+                    <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+                        <button
+                            className="lightbox-close"
+                            onClick={() => setSelectedImage(null)}
+                        >
+                            ×
+                        </button>
+                        <img
+                            src={`${NLP_URL}${selectedImage.url}`}
+                            alt={`From ${selectedImage.source}`}
+                        />
+                        <div className="lightbox-caption">
+                            Source: {selectedImage.source} | Page {selectedImage.page + 1}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/**
  * Chat Message Component
  */
 const ChatMessage = ({ message, isUser, onEdit, onImageClick }) => {
@@ -223,6 +286,10 @@ const ChatMessage = ({ message, isUser, onEdit, onImageClick }) => {
 
                 {message.results && message.results.length > 0 && (
                     <ResultsTable results={message.results} />
+                )}
+
+                {message.images && message.images.length > 0 && (
+                    <ImageGallery images={message.images} />
                 )}
 
                 {message.sql && (
@@ -388,6 +455,7 @@ function App() {
                 isUser: false,
                 sql: data.sql,
                 results: data.results,
+                images: data.images,  // NEW: include images
                 row_count: data.row_count,
                 images: data.images || [],  // Multimodal: images from BRD
                 confidence_score: data.confidence_score,
