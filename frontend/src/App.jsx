@@ -99,6 +99,68 @@ const SQLDisplay = ({ sql }) => {
 };
 
 /**
+ * Image Lightbox Modal Component
+ */
+const ImageLightbox = ({ images, currentIndex, onClose, onNavigate }) => {
+    const currentImage = images[currentIndex];
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+            if (e.key === 'ArrowLeft' && currentIndex > 0) onNavigate(currentIndex - 1);
+            if (e.key === 'ArrowRight' && currentIndex < images.length - 1) onNavigate(currentIndex + 1);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = 'auto';
+        };
+    }, [currentIndex, images.length, onClose, onNavigate]);
+
+    return (
+        <div className="lightbox-overlay" onClick={onClose}>
+            <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+                <button className="lightbox-close" onClick={onClose}>
+                    &times;
+                </button>
+
+                {images.length > 1 && currentIndex > 0 && (
+                    <button
+                        className="lightbox-nav lightbox-prev"
+                        onClick={() => onNavigate(currentIndex - 1)}
+                    >
+                        &#8249;
+                    </button>
+                )}
+
+                <img
+                    src={currentImage.data}
+                    alt={`BRD Screenshot ${currentIndex + 1}`}
+                    className="lightbox-image"
+                />
+
+                {images.length > 1 && currentIndex < images.length - 1 && (
+                    <button
+                        className="lightbox-nav lightbox-next"
+                        onClick={() => onNavigate(currentIndex + 1)}
+                    >
+                        &#8250;
+                    </button>
+                )}
+
+                <div className="lightbox-info">
+                    <span className="lightbox-source">{currentImage.source || 'BRD Document'}</span>
+                    {images.length > 1 && (
+                        <span className="lightbox-counter">{currentIndex + 1} / {images.length}</span>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/**
  * Score Badge Component
  */
 const ScoreBadge = ({ label, score }) => {
@@ -128,7 +190,7 @@ const ScoreBadge = ({ label, score }) => {
 /**
  * Chat Message Component
  */
-const ChatMessage = ({ message, isUser, onEdit }) => {
+const ChatMessage = ({ message, isUser, onEdit, onImageClick }) => {
     return (
         <div className={`message ${isUser ? 'user-message' : 'bot-message'}`}>
             {!isUser && (
@@ -165,6 +227,30 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
 
                 {message.sql && (
                     <SQLDisplay sql={message.sql} />
+                )}
+
+                {/* Multimodal: Display images from BRD documents */}
+                {message.images && message.images.length > 0 && (
+                    <div className="images-section">
+                        <div className="images-header">
+                            <span className="images-icon">📷</span>
+                            <span>Related Screenshots ({message.images.length})</span>
+                        </div>
+                        <div className="images-gallery">
+                            {message.images.map((img, idx) => (
+                                <div key={idx} className="image-container">
+                                    <img
+                                        src={img.data}
+                                        alt={`BRD Screenshot ${idx + 1}`}
+                                        className="brd-image"
+                                        onClick={() => onImageClick && onImageClick(message.images, idx)}
+                                        title={`From: ${img.source || 'BRD Document'} - Click to enlarge`}
+                                    />
+                                    <span className="image-source">{img.source || 'BRD'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 )}
 
                 <div className="message-time">
@@ -229,8 +315,22 @@ function App() {
     const [isLoading, setIsLoading] = useState(false);
     const [queryMode, setQueryMode] = useState('auto');
     const [editingMessageId, setEditingMessageId] = useState(null);
+    const [lightboxData, setLightboxData] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+
+    // Lightbox handlers
+    const openLightbox = (images, index) => {
+        setLightboxData({ images, currentIndex: index });
+    };
+
+    const closeLightbox = () => {
+        setLightboxData(null);
+    };
+
+    const navigateLightbox = (index) => {
+        setLightboxData(prev => ({ ...prev, currentIndex: index }));
+    };
 
     // IGNIS-specific suggestions
     const suggestions = [
@@ -286,10 +386,10 @@ function App() {
                     ? data.response
                     : `Sorry, I couldn't process that: ${data.error}`,
                 isUser: false,
-                isUser: false,
                 sql: data.sql,
                 results: data.results,
                 row_count: data.row_count,
+                images: data.images || [],  // Multimodal: images from BRD
                 confidence_score: data.confidence_score,
                 relevance_score: data.relevance_score,
                 timestamp: new Date().toISOString()
@@ -450,6 +550,7 @@ function App() {
                                 message={msg}
                                 isUser={msg.isUser}
                                 onEdit={msg.isUser ? handleEditMessage : null}
+                                onImageClick={openLightbox}
                             />
                         ))}
                         {isLoading && <TypingIndicator />}
@@ -529,6 +630,16 @@ function App() {
                     </p>
                 </div>
             </main>
+
+            {/* Image Lightbox Modal */}
+            {lightboxData && (
+                <ImageLightbox
+                    images={lightboxData.images}
+                    currentIndex={lightboxData.currentIndex}
+                    onClose={closeLightbox}
+                    onNavigate={navigateLightbox}
+                />
+            )}
         </div>
     );
 }

@@ -451,7 +451,7 @@ class HybridChatResponse(BaseModel):
     sql: Optional[str] = None
     results: Optional[List[Any]] = None
     sources: Optional[List[str]] = None
-    error: Optional[str] = None
+    images: Optional[List[Dict[str, Any]]] = None  # ✅ Multimodal: images from BRD
     error: Optional[str] = None
     routing_confidence: Optional[float] = None
     confidence_score: Optional[int] = None
@@ -577,6 +577,7 @@ async def hybrid_chat(request: HybridChatRequest):
                 sql=None,
                 results=None,
                 sources=brd_result.get("sources", []),
+                images=brd_result.get("images", []),  # ✅ Multimodal: return images
                 error=brd_result.get("error"),
                 routing_confidence=confidence
             )

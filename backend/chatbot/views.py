@@ -384,18 +384,20 @@ def chat(request):
             # BRD queries return response directly from NLP service
             response_text = nlp_data.get('response', 'No response from BRD documents.')
             sources = nlp_data.get('sources', [])
-            
+            images = nlp_data.get('images', [])  # Multimodal: images from BRD
+
             audit_logger.log_query(
                 client_ip, question, None, True,
                 row_count=0,
                 user_id=user_context.get('user_id')
             )
-            
+
             return JsonResponse({
                 'success': True,
                 'query_type': 'brd',
                 'response': response_text,
                 'sources': sources,
+                'images': images,  # Multimodal: pass images to frontend
                 'sql': None,
                 'results': [],
                 'row_count': 0
