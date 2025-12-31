@@ -75,6 +75,26 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                         </details>
                     </div>
                 )}
+                {/* ✅ Multimodal: Display images from BRD documents */}
+                {message.images && message.images.length > 0 && (
+                    <div className="message-images">
+                        <p className="images-label">📷 Related Screenshots ({message.images.length}):</p>
+                        <div className="images-gallery">
+                            {message.images.map((img, idx) => (
+                                <div key={idx} className="image-container">
+                                    <img
+                                        src={img.data}
+                                        alt={`BRD Screenshot ${idx + 1}`}
+                                        className="brd-image"
+                                        onClick={() => window.open(img.data, '_blank')}
+                                        title={`From: ${img.source || 'BRD Document'} - Click to enlarge`}
+                                    />
+                                    <span className="image-source">{img.source || 'BRD'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="message-time">
                     {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
@@ -170,7 +190,7 @@ const Chatbot = () => {
                 throw new Error(data.error || 'Failed to process question');
             }
 
-            // Create bot message with response, SQL, and results
+            // Create bot message with response, SQL, results, and images
             const botMessage = {
                 id: Date.now() + 1,
                 text: data.response,
@@ -178,6 +198,7 @@ const Chatbot = () => {
                 sql: data.sql,
                 results: data.results,
                 row_count: data.row_count,
+                images: data.images || [],  // ✅ Multimodal: images from BRD
                 timestamp: new Date().toISOString()
             };
 

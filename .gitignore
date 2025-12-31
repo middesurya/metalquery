@@ -1,34 +1,433 @@
-# Environment and secrets
-.env
-*.env.local
+# =============================================
+# Industry Standard .gitignore
+# Python/Django + React + NLP/ML Project
+# =============================================
 
+# =============================================
+# Environment & Secrets
+# =============================================
+.env
+.env.*
+*.env.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+secrets/
+credentials/
+*.pem
+*.key
+*.crt
+
+# =============================================
 # Python
+# =============================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
 venv/
 env/
 .venv/
 ENV/
+env.bak/
+venv.bak/
+.conda/
+conda-env/
 
-# Node
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Scrapy
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# =============================================
+# Django
+# =============================================
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_collected/
+*.pot
+*.pyc
+
+# =============================================
+# Node.js / React / Frontend
+# =============================================
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Build outputs
 dist/
 build/
 .next/
+out/
+.nuxt/
+.output/
 
-# IDE
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+bower_components/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Yarn
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# =============================================
+# NLP / ML / Data Science
+# =============================================
+# ChromaDB / Vector stores
+chroma_db/
+chromadb/
+*.chroma
+faiss_index/
+*.faiss
+
+# Model files (large binary files)
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.model
+*.pt
+*.pth
+*.onnx
+*.pb
+saved_models/
+models/
+checkpoints/
+
+# Sentence Transformers cache
+.cache/
+huggingface/
+transformers_cache/
+
+# Data files (if too large)
+*.csv
+*.parquet
+*.feather
+!**/sample*.csv
+!**/test*.csv
+
+# Extracted images from PDFs
+brd_images/
+
+# Datasets
+data_set/
+datasets/
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# =============================================
+# IDE & Editors
+# =============================================
+# VSCode
 .vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, WebStorm, etc.)
 .idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
 *.swp
 *.swo
+*~
+.netrwhist
 
-# Logs
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# TextMate
+*.tmproj
+*.tmproject
+tmtags
+
+# Notepad++
+nppBackup/
+
+# =============================================
+# OS Generated Files
+# =============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================
+# Logs & Temporary Files
+# =============================================
 *.log
 logs/
+log/
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
 
-# OS
-.DS_Store
-Thumbs.db
+# =============================================
+# Docker
+# =============================================
+.docker/
+docker-compose.override.yml
+
+# =============================================
+# Database Files
+# =============================================
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+!**/migrations/*.sql
+!**/schema*.sql
+
+# PostgreSQL
+*.pgsql
+
+# =============================================
+# Testing
+# =============================================
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.hypothesis/
+test-results/
+test-reports/
+junit.xml
+
+# =============================================
+# Claude Code / AI Tools
+# =============================================
+.claude/
+.cursor/
+.aider*
+.continue/
+.playwright-mcp/
+
+# Personal/Local documentation files
+skills.md
+WARP.md
+CHANGES.md
+
+# =============================================
+# Miscellaneous
+# =============================================
+# Local configuration overrides
+*.local
+*.local.*
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Package files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Profiling data
+*.prof
+*.lprof
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Ansible (if used)
+*.retry
+
+# nul file (Windows artifact)
+nul

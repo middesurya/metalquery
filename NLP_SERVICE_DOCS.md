@@ -9,17 +9,24 @@ A hybrid natural language system for the IGNIS industrial furnace database. Conv
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    FRONTEND     │────▶│  DJANGO BACKEND │────▶│   NLP SERVICE   │
-│    (React)      │     │   (Port 8000)   │     │   (Port 8003)   │
-│    Port 3000    │     │                 │     │                 │
+│    (React)      │     │   (Port 8000)   │     │   (Port 8004)   │
+│    Port 5173    │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                        │
                                │                 ┌──────┴──────┐
                                ▼                 ▼             ▼
                         ┌─────────────┐   ┌───────────┐  ┌───────────┐
                         │  PostgreSQL │   │ Groq API  │  │ ChromaDB  │
-                        │   Database  │   │ LLM Model │  │ (BRD RAG) │
-                        └─────────────┘   └───────────┘  └───────────┘
+                        │   Database  │   │ LLM Model │  │(Multimodal│
+                        └─────────────┘   └───────────┘  │ BRD RAG)  │
+                                                         └───────────┘
 ```
+
+### Multimodal RAG Features
+- **961 text chunks** from 33 BRD PDF documents
+- **389 extracted images** (screenshots, diagrams, flowcharts)
+- **Intelligent filtering** removes logos, icons, and repeated headers
+- **Image lightbox** for full-size image viewing
 
 ### Security Boundary
 - **Django** owns the database connection
@@ -88,8 +95,8 @@ DEBUG=True
 
 # NLP Service
 NLP_SERVICE_HOST=localhost
-NLP_SERVICE_PORT=8003
-NLP_SERVICE_URL=http://localhost:8003
+NLP_SERVICE_PORT=8004
+NLP_SERVICE_URL=http://localhost:8004
 
 # LLM (REQUIRED - Get from https://console.groq.com/keys)
 GROQ_API_KEY=your_groq_api_key_here
@@ -129,7 +136,8 @@ python manage.py runserver
 cd nlp_service
 ..\venv\Scripts\activate
 python main.py
-# Runs on http://localhost:8003
+# Runs on http://localhost:8004
+# Loads 289 dynamic keywords from schema
 ```
 
 **Terminal 3: React Frontend**
@@ -227,7 +235,7 @@ CRITICAL SQL RULES FOR AGGREGATION:
 
 ---
 
-## � Example Queries
+## Example Queries
 
 ### Simple Aggregations
 ```
@@ -253,7 +261,7 @@ CRITICAL SQL RULES FOR AGGREGATION:
 
 ---
 
-## � API Endpoints
+## API Endpoints
 
 ### Django Backend (Port 8000)
 
@@ -263,7 +271,7 @@ CRITICAL SQL RULES FOR AGGREGATION:
 | `/api/chatbot/schema/` | GET | Get database schema |
 | `/api/chatbot/health/` | GET | Health check |
 
-### NLP Service (Port 8003)
+### NLP Service (Port 8004)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -271,11 +279,13 @@ CRITICAL SQL RULES FOR AGGREGATION:
 | `/api/v1/generate-sql` | POST | SQL generation only |
 | `/api/v1/format-response` | POST | Format results as text |
 | `/api/v1/routing-test` | GET | Test query routing |
+| `/api/v1/brd-debug` | GET | BRD RAG debug info (chunks, images, test search) |
+| `/api/brd-images/{file}` | GET | Serve extracted images |
 | `/health` | GET | Health check |
 
 ---
 
-## � Security Features
+## Security Features
 
 ### SQL Guardrails (`guardrails.py`)
 - ✅ Only SELECT queries allowed
@@ -294,7 +304,7 @@ CRITICAL SQL RULES FOR AGGREGATION:
 
 ---
 
-## �🛠️ Development
+## Development
 
 ### Add New KPI Table
 
@@ -318,12 +328,12 @@ Edit `nlp_service/prompts_v2.py`:
 
 ---
 
-## � Troubleshooting
+## Troubleshooting
 
 ### "NLP service unavailable"
 ```bash
 # Check if NLP service is running
-curl http://localhost:8003/health
+curl http://localhost:8004/health
 
 # Restart NLP service
 cd nlp_service
@@ -342,10 +352,12 @@ python main.py
 
 ---
 
-## �📌 Version History
+## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 6.1.0 | Dec 2024 | Dynamic schema keywords (289 keywords), date query fix, port 8004 |
+| 6.0.0 | Dec 2024 | Multimodal RAG (text + 389 images), image lightbox, BRD search fix |
 | 5.0.0 | Dec 2024 | Hybrid SQL + BRD RAG, Query Router |
 | 4.0.0 | Dec 2024 | Schema-aware prompts, Diagnostics |
 | 3.0.0 | Dec 2024 | Multi-table JOINs support |

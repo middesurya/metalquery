@@ -436,6 +436,62 @@
   cursor: not-allowed;
 }
 
+/* BRD Images Gallery */
+.message-images {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+}
+
+.images-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--chat-text-muted);
+  font-weight: 500;
+}
+
+.images-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.image-container {
+  position: relative;
+  flex: 0 0 auto;
+  max-width: 150px;
+}
+
+.brd-image {
+  width: 100%;
+  max-width: 150px;
+  height: auto;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--chat-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.brd-image:hover {
+  transform: scale(1.05);
+  border-color: var(--chat-primary);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.image-source {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--chat-text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .chatbot-window {

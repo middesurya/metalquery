@@ -1,262 +1,177 @@
-# MetalQuery - AI-Powered Industrial Analytics Platform
+# MetalQuery - Hybrid NLP-to-SQL + Multimodal RAG System
 
-🔩 **MetalQuery** is a production-ready hybrid AI chatbot for industrial furnace analytics, combining Natural Language to SQL (NL2SQL) with multi-modal RAG for BRD document Q&A.
+🏭 **MetalQuery** is a production-ready AI-powered chatbot for manufacturing KPI analysis and BRD (Business Requirement Document) question-answering. It converts natural language queries into SQL and retrieves information from 33 PDF documents with **multimodal support (text + images)**.
 
-![MetalQuery Demo](https://img.shields.io/badge/AI-Groq_LLM-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/NLP-FastAPI-009688) ![Django](https://img.shields.io/badge/Backend-Django-092E20) ![Security](https://img.shields.io/badge/Security-IEC_62443-green)
+![Groq](https://img.shields.io/badge/LLM-Groq_llama--3.3--70b-orange) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/NLP-FastAPI-009688) ![Django](https://img.shields.io/badge/Backend-Django-092E20) ![ChromaDB](https://img.shields.io/badge/Vector-ChromaDB-green)
 
----
-
-## 🏗️ Production Architecture
+## 🏗️ Architecture
 
 ```
                              SECURITY BOUNDARY
                              AI never touches DB
                                     ↓
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│ React Frontend  │────▶│  Django Backend │────▶│ NLP Microservice│────▶│   Groq LLM   │
-│   (Port 3000)   │     │   (Port 8000)   │     │   (Port 8003)   │     │ llama-3.3-70b│
-└─────────────────┘     └────────┬────────┘     └────────┬────────┘     └──────────────┘
-                                 │                       │
-                                 ▼ Django ORM            ▼
+│ React Frontend  │────▶│  Django Backend │────▶│ NLP Microservice│────▶│ Groq LLM API │
+│   (Port 5173)   │     │   (Port 8000)   │     │   (Port 8004)   │     │(llama-3.3-70b)│
+└─────────────────┘     └────────┬────────┘     └───────┬─────────┘     └──────────────┘
+                                 │                      │
+                                 ▼                      ▼
                         ┌─────────────────┐     ┌─────────────────┐
-                        │   PostgreSQL    │     │   ChromaDB      │
-                        │  (29+ Tables)   │     │ (BRD Vectors)   │
-                        └─────────────────┘     └─────────────────┘
+                        │   PostgreSQL    │     │    ChromaDB     │
+                        │  (29 KPI tables)│     │ (961 chunks +   │
+                        └─────────────────┘     │  389 images)    │
+                                                └─────────────────┘
 ```
 
 ### Key Security Principles (IEC 62443 SL-2/SL-3)
 - **AI Never Touches Database** - NLP service ONLY generates SQL
-- **4-Layer Defense** - Prompt flipping, injection, RBAC, anomaly detection
-- **Rate Limiting** - Role-based (15-100 requests/minute)
-- **Audit Logging** - All queries logged for compliance
+- **Django Owns the Database** - All queries go through Django ORM
+- **Defense in Depth** - SQL validated at both NLP and Django layers
+- **Rate Limiting** - 30 requests/minute per IP
+- **Query Guard** - Off-topic/harmful query detection
 
 ---
 
 ## ✨ Features
 
-### Core Capabilities
-- 🤖 **Natural Language to SQL** - Ask questions in plain English, get data
-- 📚 **BRD Document Q&A** - Multi-modal RAG with text + image retrieval
-- 🔄 **Hybrid Routing** - Auto-detects SQL vs document queries
-- 📊 **Rich Data Display** - Formatted tables with units
-- 🖼️ **VLM Image Captioning** - Semantic captions for PDF images (Grok Vision)
+### SQL Generation
+- 🤖 **Natural Language to SQL** - Ask questions about KPIs in plain English
+- 📊 **29 KPI Tables** - OEE, Downtime, Yield, Defect Rate, MTBF, MTTR, etc.
+- 🔄 **Self-Correction** - Active retry for low-quality SQL (up to 2 retries)
+- ✅ **Confidence Scoring** - 90-100% accuracy with relevance scores
 
-### Security Features
-- 🛡️ **Prompt Injection Defense** - 15+ attack pattern detection
-- 🔁 **Flipping Attack Detection** - 4 reversal modes (FlipAttack research)
-- 👤 **RBAC** - 4-tier access (Admin, Engineer, Operator, Viewer)
-- 🔍 **Anomaly Detection** - Behavioral analysis for red team attacks
-- 📝 **Comprehensive Audit Trail** - IEC 62443 compliant logging
+### Multimodal BRD RAG
+- 📄 **33 PDF Documents** - Business Requirement Documents indexed
+- 🖼️ **389 Extracted Images** - Screenshots, diagrams, flowcharts from PDFs
+- 🔍 **Semantic Search** - Vector similarity using SentenceTransformers
+- 💬 **LLM-Powered Answers** - Natural language responses with source citations
+- 🌅 **Image Lightbox** - Click to view full-size images with navigation
 
----
+### Query Routing
+- 🚦 **Automatic Detection** - Routes SQL vs BRD queries automatically
+- 📈 **"Show OEE for furnace 1"** → SQL generation
+- 📖 **"What is EHS?"** → BRD RAG retrieval
+- ⚙️ **Manual Override** - Force SQL or BRD mode
 
-## 📊 Database Content
+## 📊 Data Content
 
-| Category | Count |
-|----------|-------|
-| KPI Tables | 20 |
-| Core Process Tables | 3 |
-| Configuration Tables | 6 |
-| Total Exposed Tables | 29+ |
+### KPI Tables (29 total)
+| Category | Tables | Description |
+|----------|--------|-------------|
+| **Performance** | OEE, Production Efficiency | Overall equipment effectiveness |
+| **Reliability** | MTBF, MTTR, Downtime | Equipment reliability metrics |
+| **Quality** | Yield, Defect Rate | Production quality |
+| **Energy** | Energy Used | Consumption tracking |
+| **Process** | TAP Production, Grading | Core manufacturing processes |
 
-### Key Metrics Available
-- OEE (Overall Equipment Efficiency)
-- Downtime Hours & MTBF/MTTR
-- Energy & Power Consumption
-- Yield Percentage & Scrap Rates
-- Production Efficiency
-- Furnace Parameters
+### BRD Documents (33 PDFs)
+- EHS Incident Reporting
+- System Configuration (Plant, Furnace)
+- User Access Control (Roles, Users)
+- Material Maintenance (Raw Materials, Additives, Products)
+- Reports (Consumption, Analysis, Quality)
+- Lab Analysis
+- Log Books
 
----
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Python 3.8+
 - Node.js 16+
 - PostgreSQL 12+
-- Groq API Key (for LLM)
+- Groq API Key (free tier available)
 
 ### Installation
 
-1. **Clone the repository**
+1. **Clone and setup environment**
    ```bash
-   git clone https://github.com/middesurya/metalquery.git
-   cd metalquery
-   ```
-
-2. **Set up environment variables**
-   ```bash
+   git clone https://github.com/your-repo/poc_nlp_tosql.git
+   cd poc_nlp_tosql
    cp .env.example .env
-   # Edit .env with your credentials
+   # Edit .env with your GROQ_API_KEY and database credentials
    ```
 
-   Required variables:
-   ```env
-   GROQ_API_KEY=your_groq_api_key
-   GROQ_MODEL=llama-3.3-70b-versatile
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=davinci
-   DB_USER=davinci
-   DB_PASSWORD=your_password
-   ```
-
-3. **Set up the NLP Service (Port 8003)**
+2. **Start NLP Service (Port 8004)**
    ```bash
    cd nlp_service
    python -m venv venv
-   .\venv\Scripts\activate  # Windows
-   # source venv/bin/activate  # Linux/Mac
+   source venv/Scripts/activate  # Windows
    pip install -r requirements.txt
    python main.py
+   # Wait for: ✓ BRD RAG initialized (961 chunks, 389 images)
+   # ✓ Loaded 289 dynamic keywords from schema
    ```
 
-4. **Set up the Django Backend (Port 8000)** (new terminal)
+3. **Start Django Backend (Port 8000)**
    ```bash
    cd backend
-   python -m venv venv
-   .\venv\Scripts\activate
-   pip install -r requirements.txt
-   python manage.py runserver
+   source ../venv/Scripts/activate
+   python manage.py runserver 0.0.0.0:8000
    ```
 
-5. **Set up the React Frontend (Port 3000)** (new terminal)
+4. **Start React Frontend (Port 5173)**
    ```bash
    cd frontend
    npm install
    npm start
    ```
 
-6. **Open the application**
-   - Frontend: http://localhost:3000
-   - Django API: http://localhost:8000/api/chatbot/
-   - NLP API Docs: http://localhost:8003/docs
-
-### Quick Start (Windows)
-```powershell
-.\start_services.bat
-```
-
----
+5. **Open http://localhost:5173**
 
 ## 💡 Example Queries
 
-### SQL Queries (Data Mode)
+### SQL Queries
 | Question | Description |
 |----------|-------------|
-| "Show OEE by furnace for last week" | KPI data with date filtering |
-| "What is the total downtime for Furnace 1?" | Aggregation query |
-| "Compare yield percentage across all furnaces" | Multi-furnace comparison |
-| "Show MTBF and MTTR trends" | Reliability metrics |
-| "What is the energy consumption by furnace?" | Energy analysis |
+| "Show OEE for furnace 1 last week" | Performance metrics |
+| "What is the average yield across all furnaces?" | Aggregations |
+| "Compare downtime between furnaces" | Cross-furnace analysis |
+| "Show defect rate trend" | Time-series data |
 
-### BRD Document Queries (Docs Mode)
+### BRD Queries
 | Question | Description |
 |----------|-------------|
-| "What is EHS?" | Definition from BRD docs |
-| "How to configure furnace parameters?" | Procedure lookup |
-| "Explain the grading process" | Process documentation |
-| "What are the safety protocols?" | Compliance info |
+| "What is EHS?" | Definitions |
+| "How do I configure a new furnace?" | Process steps |
+| "Explain the grading plan process" | Documentation |
+| "What are user roles?" | System configuration |
 
----
+## 🔒 Security Features
 
-## 🔒 Security Architecture
-
-### 4-Layer Defense System
-
-```
-USER INPUT (Untrusted)
-    ↓
-[LAYER 1] NLP Service
-    • Prompt flipping detection (4 modes)
-    • Prompt signature validation (15+ patterns)
-    • Schema boundary enforcement
-    ↓
-[LAYER 2] Django Backend
-    • Rate limiting (role-based)
-    • RBAC (4-tier access control)
-    • SQL injection validation
-    • Data masking (proprietary fields)
-    ↓
-[LAYER 3] PostgreSQL
-    • RLS policies per role
-    • Statement timeout (30s)
-    • Connection limits
-    ↓
-[LAYER 4] Monitoring
-    • Anomaly detection
-    • Red team attack detection
-    • Compliance reporting
-```
-
-### RBAC Tiers
-| Role | Tables | Max Rows | Rate Limit |
-|------|--------|----------|------------|
-| Admin | All | 10,000 | 100 req/min |
-| Engineer | 10 | 5,000 | 50 req/min |
-| Operator | 5 | 1,000 | 30 req/min |
-| Viewer | 3 | 500 | 15 req/min |
-
-### Threats Defended
-| Threat | Detection Method |
-|--------|------------------|
-| Prompt Injection | PromptSignatureValidator |
-| Flipping Attacks | FlippingDetector (4 modes) |
-| SQL Injection | Multi-layer validation |
-| Red Team Attacks | AnomalyDetector |
-| Data Exfiltration | RBAC + Data Masking |
-
----
+| Layer | Protection |
+|-------|------------|
+| **Rate Limiting** | 30 req/min per IP |
+| **Query Guard** | Off-topic/harmful query blocking |
+| **SQL Guardrails** | SELECT only, table whitelist |
+| **Django Validator** | Defense in depth |
+| **Query Timeout** | 30 second limit |
+| **Row Limit** | Max 100 rows |
+| **Audit Logging** | Compliance tracking |
 
 ## 📁 Project Structure
 
 ```
-metalquery/
-├── backend/                    # Django Backend (Port 8000)
-│   ├── chatbot/
-│   │   ├── views.py           # Chat API, SQL validation, execution
-│   │   ├── services/          # Service clients
-│   │   └── serializers.py     # API serializers
-│   ├── ignis/
-│   │   └── schema/            # Table whitelist & schema
-│   └── config/
-│       └── settings.py        # Django settings
+poc_nlp_tosql/
+├── backend/               # Django REST API
+│   ├── chatbot/          # Main app (views, services)
+│   ├── ignis/            # 150+ ORM models for KPI tables
+│   └── config/           # Django settings
 │
-├── nlp_service/               # FastAPI NLP Service (Port 8003)
-│   ├── main.py               # Hybrid chat endpoint
-│   ├── config.py             # Groq API configuration
-│   ├── prompts_v2.py         # Schema-aware prompts (29 tables)
-│   ├── query_router.py       # SQL vs BRD routing
-│   ├── query_guard.py        # Input validation & guardrails
-│   ├── brd_rag.py            # BRD document handler
-│   ├── brd_loader.py         # PDF + image ingestion
-│   ├── guardrails.py         # SQL security validation
-│   ├── rate_limiter.py       # Token-aware rate limiting
-│   ├── accuracy_tester.py    # SQL accuracy testing
-│   ├── security/             # Security modules
-│   │   ├── flipping_detector.py
-│   │   ├── rbac.py
-│   │   ├── sql_validator.py
-│   │   ├── anomaly_detector.py
-│   │   ├── audit_logger.py
-│   │   └── red_team_simulator.py
-│   ├── brd/                  # BRD PDF documents (33 files)
-│   └── chroma_db/            # Vector embeddings
+├── nlp_service/          # FastAPI NLP microservice
+│   ├── brd/              # 33 PDF documents for RAG
+│   ├── brd_images/       # 389 extracted images
+│   ├── chroma_db/        # Vector database
+│   ├── brd_loader.py     # PDF extraction + ChromaDB
+│   ├── brd_rag.py        # RAG query handler
+│   ├── query_router.py   # SQL vs BRD routing
+│   └── guardrails.py     # SQL validation
 │
-├── frontend/                  # React Frontend (Port 3000)
-│   ├── src/
-│   │   ├── App.jsx           # Main chat component
-│   │   ├── config.js         # API configuration
-│   │   └── components/       # UI components
-│   └── package.json
+├── frontend/             # React SPA
+│   └── src/
+│       └── App.jsx       # Chat interface + image lightbox
 │
-├── ARCHITECTURE.md           # System architecture docs
-├── SECURITY.md               # Security implementation docs
-├── CHANGES.md                # Change log
-├── start_services.bat        # Windows startup script
-└── .env.example              # Environment template
+├── skills.md             # Full documentation + extension ideas
+└── README.md             # This file
 ```
 
 ---
@@ -266,17 +181,34 @@ metalquery/
 ### Django Backend (Port 8000)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/chatbot/chat/` | POST | Main chat endpoint (hybrid) |
-| `/api/chatbot/schema/` | GET | Get database schema |
+| `/api/chatbot/chat/` | POST | Main chat endpoint |
+| `/api/chatbot/schema/` | GET | Database schema |
 | `/api/chatbot/health/` | GET | Health check |
 
-### NLP Service (Port 8003)
+### NLP Service (Port 8004)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/chat` | POST | Hybrid (SQL + BRD) endpoint |
+| `/api/v1/chat` | POST | Hybrid chat (SQL + BRD) |
 | `/api/v1/generate-sql` | POST | SQL generation only |
-| `/api/v1/format-response` | POST | Format results to NL |
-| `/health` | GET | Health check |
+| `/api/v1/routing-test` | GET | Test routing logic |
+| `/api/v1/brd-debug` | GET | BRD system status |
+| `/api/brd-images/{file}` | GET | Serve extracted images |
+
+## 📈 Performance
+
+- **SQL Query Response**: ~1-2 seconds
+- **BRD Query Response**: ~2-3 seconds
+- **First-time BRD Init**: ~2-3 minutes (downloads model)
+- **Subsequent BRD Init**: ~10-20 seconds
+- **Confidence Scores**: 90-100% average
+
+## 📚 Documentation
+
+- [skills.md](./skills.md) - Full architecture documentation + extension ideas
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Detailed system design
+- [NLP_SERVICE_DOCS.md](./NLP_SERVICE_DOCS.md) - NLP service documentation
+- [QUERY_ROUTING.md](./QUERY_ROUTING.md) - Query routing logic
+- [CHANGES.md](./CHANGES.md) - Changelog
 
 ---
 
@@ -327,22 +259,14 @@ print(f"Block Rate: {results['block_rate']*100:.1f}%")
 
 ## 📄 License
 
-MIT License - feel free to use this project for learning and development.
-
-## 🙏 Acknowledgments
-
-- Groq for high-speed LLM inference (llama-3.3-70b-versatile)
-- LangChain for LLM orchestration
-- ChromaDB for vector storage
-- FlipAttack research for flipping attack detection methods
+MIT License - See LICENSE file for details.
 
 ---
 
-## 📈 Key Metrics
-
-| Metric | Target | Expected |
-|--------|--------|----------|
-| Attack Block Rate | >90% | 93-97% |
-| False Positive Rate | <10% | <5% |
-| Query Overhead | <100ms | 35-50ms |
-| SQL Accuracy | >85% | 87-92% |
+Last Updated: 2025-12-30
+- Multimodal RAG with 389 images
+- Image lightbox viewer
+- BRD RAG search fix
+- Dynamic schema keywords (289 keywords auto-loaded from 29 tables)
+- Fixed date query blocking (e.g., 2024-01-07 no longer blocked as math)
+- NLP service moved to port 8004
