@@ -6,6 +6,85 @@ This document details all changes made to implement the NLP-to-SQL + RAG system 
 
 ---
 
+## Recent Changes (2025-12-30)
+
+### Dynamic Schema Keywords & Date Query Fix
+
+**Problem 1:** Queries containing table-specific terms like "cycle time" were being blocked as "off-topic" because keywords were hardcoded.
+
+**Solution:** Added dynamic keyword loading from database schema:
+- `QueryGuard.load_schema_keywords()` extracts keywords from table and column names
+- 289 keywords auto-loaded from 29 tables
+- Supports compound terms (e.g., "cycle time", "production efficiency")
+
+**Problem 2:** Date queries like "What is the cycle time for FURNACE on 2024-01-07?" were blocked as "math questions" because the date format (with hyphens) triggered math pattern detection.
+
+**Solution:** Modified math patterns in `query_guard.py`:
+- Removed subtraction (`-`) from math operator detection
+- Date patterns (YYYY-MM-DD) no longer trigger math blocking
+
+**Problem 3:** Frontend was using wrong port (8003 instead of 8004).
+
+**Solution:** Updated `App.jsx` to use port 8004 for NLP service.
+
+**Files Modified:**
+- `nlp_service/query_guard.py` - Added `load_schema_keywords()` method, fixed math patterns
+- `nlp_service/main.py` - Call `guard.load_schema_keywords(schema_dict)` on startup
+- `frontend/src/App.jsx` - Changed NLP_URL port to 8004, removed duplicate image section
+
+---
+
+### BRD RAG Fix - ChromaDB Stale Reference Issue
+
+**Problem:** BRD queries returned "I couldn't find relevant information" despite 961 text chunks and 389 images being indexed in ChromaDB.
+
+**Root Cause:** The `search()` and `search_images()` functions in `brd_loader.py` were using stale `self.vectorstore` and `self.image_collection` references. When uvicorn reloaded or the server restarted, these cached references became invalid.
+
+**Solution:** Modified both search functions to always get fresh ChromaDB client and collection references on every search call:
+
+```python
+def search(self, query: str, top_k: int = 5) -> List[Dict]:
+    """Always gets a fresh collection reference from ChromaDB to avoid stale references."""
+    import chromadb
+    client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
+    collection = client.get_collection("brd_documents")
+    # ... rest of search logic
+```
+
+**Files Modified:**
+- `nlp_service/brd_loader.py` - Fixed `search()` (lines 387-436) and `search_images()` (lines 438-494)
+- `nlp_service/brd_rag.py` - Added logging for search results
+
+### Multimodal RAG with Image Extraction
+
+**Added:** Full multimodal support for BRD document search:
+- Extracts images from PDFs with intelligent filtering (removes logos, icons)
+- Stores image context in separate ChromaDB collection (`brd_images`)
+- Returns both text chunks and relevant images in search results
+- Frontend displays images with lightbox viewer
+
+**Statistics:**
+- 961 text chunks indexed
+- 389 images extracted and indexed
+- Image filtering removes images < 10KB, logo-shaped images, and repeated headers/footers
+
+### Documentation Updates
+
+- **README.md** - Complete rewrite with current architecture
+- **skills.md** - Added "Future Extension Ideas" section with 10 categories
+- **ARCHITECTURE.md** - Updated ports and multimodal info
+- **NLP_SERVICE_DOCS.md** - Added multimodal RAG section
+
+### New Debug Endpoint
+
+Added `/api/v1/brd-debug` endpoint for diagnosing BRD RAG issues:
+```bash
+curl http://localhost:8003/api/v1/brd-debug
+# Returns: text_chunks, image_count, initialized status, test search results
+```
+
+---
+
 ## Summary of Changes
 
 | Category | Files Created | Files Modified |

@@ -128,10 +128,13 @@ async def startup_event():
     try:
         schema_loader.load_schema()
         schema_dict = schema_loader.get_schema_dict()
-        
+
         # ✅ Initialize diagnostic
         diagnostic = SQLDiagnostic(schema_dict)
-        
+
+        # ✅ Load dynamic keywords from schema into QueryGuard
+        guard.load_schema_keywords(schema_dict)
+
         logger.info(f"✓ Schema loaded: {len(schema_loader.get_table_names())} tables")
         logger.info(f"✓ SQL Diagnostic initialized")
         
@@ -173,6 +176,26 @@ async def health_check():
         "model": settings.model_name,
         "backend_url": settings.django_api_url,
         "schema_loaded": len(schema_loader.get_table_names() or []) > 0
+    }
+
+@app.get("/api/v1/brd-debug")
+async def brd_debug():
+    """Debug endpoint to check BRD RAG state."""
+    from brd_loader import brd_loader
+
+    # Test search
+    test_results = brd_loader.search("additives", top_k=2)
+
+    return {
+        "brd_initialized_global": brd_initialized,
+        "brd_handler_initialized": brd_handler.is_initialized,
+        "brd_loader_initialized": brd_loader._initialized,
+        "vectorstore_exists": brd_loader.vectorstore is not None,
+        "vectorstore_type": str(type(brd_loader.vectorstore)),
+        "documents_count": len(brd_loader.documents),
+        "images_count": len(brd_loader.images),
+        "test_search_results": len(test_results),
+        "test_results_preview": test_results[0]['content'][:100] if test_results else "EMPTY"
     }
 
 @app.get("/api/v1/rate-limit-status")
@@ -599,8 +622,11 @@ async def hybrid_chat(request: HybridChatRequest):
                 )
             
             # Query BRD documents (now returns images too)
+            logger.info(f">>> BRD QUERY START: '{request.question}'")
+            logger.info(f">>> brd_initialized={brd_initialized}, handler._initialized={brd_handler.is_initialized}")
             llm = get_llm()
             brd_result = brd_handler.query(request.question, llm=llm, top_k=5, image_k=3)
+            logger.info(f">>> BRD QUERY RESULT: success={brd_result.get('success')}, sources={len(brd_result.get('sources', []))}")
             
             return HybridChatResponse(
                 success=brd_result["success"],

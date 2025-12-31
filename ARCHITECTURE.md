@@ -26,12 +26,20 @@
 ### Technology Stack
 | Layer | Technology | Port |
 |-------|------------|------|
-| Frontend | React 18 | 3000 |
+| Frontend | React 18 | 5173 |
 | Backend Gateway | Django 4.2 | 8000 |
-| NLP Service | FastAPI + LangChain | 8003 |
+| NLP Service | FastAPI + LangChain | 8004 |
 | LLM Provider | Groq (llama-3.3-70b) | Cloud |
 | Database | PostgreSQL | 5432 |
-| Vector Store | ChromaDB | Embedded |
+| Vector Store | ChromaDB (Multimodal) | Embedded |
+
+### Multimodal RAG Capabilities
+| Feature | Description |
+|---------|-------------|
+| Text Chunks | 961 chunks from 33 PDFs |
+| Images | 389 extracted images with context |
+| Image Filtering | Removes logos, icons, headers/footers |
+| Lightbox Viewer | Click-to-expand image display |
 
 ---
 
@@ -70,7 +78,7 @@
           │                                               │
           ▼                                               ▼
 ┌─────────────────────────────────┐         ┌─────────────────────────────────┐
-│   NLP MICROSERVICE (Port 8003)  │         │      POSTGRESQL DATABASE        │
+│   NLP MICROSERVICE (Port 8004)  │         │      POSTGRESQL DATABASE        │
 │  ═══════════════════════════════│         │  ═══════════════════════════════│
 │   🤖 AI BOUNDARY - NO DB ACCESS │         │                                 │
 │  ┌─────────────────────────────┐│         │  ┌─────────────────────────────┐│
@@ -417,7 +425,7 @@ metalquery/
 │   ├── manage.py
 │   └── requirements.txt
 │
-├── nlp_service/                  # FastAPI (Port 8003)
+├── nlp_service/                  # FastAPI (Port 8004)
 │   ├── main.py                  # Hybrid chat endpoint
 │   ├── config.py                # Groq API config
 │   ├── prompts_v2.py            # 29 tables, few-shot examples
@@ -460,8 +468,8 @@ DEBUG=True
 
 # NLP Service
 NLP_SERVICE_HOST=localhost
-NLP_SERVICE_PORT=8003
-NLP_SERVICE_URL=http://localhost:8003
+NLP_SERVICE_PORT=8004
+NLP_SERVICE_URL=http://localhost:8004
 
 # LLM (REQUIRED)
 GROQ_API_KEY=your_groq_api_key

@@ -182,12 +182,14 @@ class EnhancedQueryGuard:
         # MATH/ARITHMETIC PATTERNS (disguised with domain keywords)
         # ═══════════════════════════════════════════════════════════
         self.math_patterns = [
-            r"\d+\s*[\+\-\*\/\^]\s*\d+",  # 2+2, 10-5, 3*4, etc.
+            # NOTE: Exclude date patterns (YYYY-MM-DD) from math detection
+            # Use negative lookahead to avoid matching dates like 2024-01-07
+            r"(?<!\d{4}-)\d+\s*[\+\*\/\^]\s*\d+",  # 2+2, 3*4, etc. (not subtraction - too many false positives with dates)
             r"(?i)\bsum of \d+ number",  # "sum of 10 numbers"
             r"(?i)\b(add|subtract|multiply|divide|plus|minus|times)\b.*\d",
-            r"(?i)\bwhat is \d+\s*[\+\-\*\/]",  # "what is 2 +"
-            r"(?i)\bcalculate \d+\s*[\+\-\*\/]",  # "calculate 5 *"
-            r"(?i)\b\d+\s*(plus|minus|times|divided by)\s*\d+",
+            r"(?i)\bwhat is \d+\s*[\+\*\/]",  # "what is 2 +" (exclude minus for dates)
+            r"(?i)\bcalculate \d+\s*[\+\*\/]",  # "calculate 5 *" (exclude minus for dates)
+            r"(?i)\b\d+\s*(plus|times|divided by)\s*\d+",  # Removed "minus" - too many date false positives
             r"(?i)\b(factorial|square root|sqrt|power of)\b",
             r"(?i)\bsolve\s+\d",  # "solve 2+2"
         ]
@@ -210,7 +212,8 @@ class EnhancedQueryGuard:
         self.primary_keywords = [
             "furnace", "oee", "efficiency", "production", "defect",
             "yield", "downtime", "quality", "output", "shift",
-            "ignis", "mes", "equipment", "machine",
+            "ignis", "mes", "equipment", "machine", "cycle time",
+            "cycle", "slowest", "fastest", "threshold",
         ]
         
         self.secondary_keywords = [
@@ -263,6 +266,55 @@ class EnhancedQueryGuard:
             "quality": ["qualitu", "qualit"],
             "ignis": ["igni", "igs"],
         }
+
+        # Dynamic keywords from schema (populated by load_schema_keywords)
+        self.dynamic_keywords = set()
+
+    def load_schema_keywords(self, schema_dict: dict) -> None:
+        """
+        Dynamically load keywords from the database schema.
+        Extracts meaningful terms from table names and column names.
+
+        Args:
+            schema_dict: Dictionary from schema_loader.get_schema_dict()
+                         Format: {table_name: {description: str, columns: {col_name: type}}}
+        """
+        keywords = set()
+
+        # Words to exclude (too generic)
+        exclude_words = {"data", "id", "no", "record", "kpi", "the", "a", "an", "of", "for", "to"}
+
+        for table_name, table_info in schema_dict.items():
+            # Extract keywords from table name
+            # e.g., "kpi_cycle_time_data" → ["cycle", "time", "cycle time"]
+            table_words = table_name.replace("_", " ").split()
+
+            for word in table_words:
+                if word.lower() not in exclude_words and len(word) > 2:
+                    keywords.add(word.lower())
+
+            # Create compound terms (e.g., "cycle time" from "kpi_cycle_time_data")
+            clean_words = [w.lower() for w in table_words if w.lower() not in exclude_words and len(w) > 2]
+            if len(clean_words) >= 2:
+                keywords.add(" ".join(clean_words[:2]))  # First two meaningful words
+                keywords.add(" ".join(clean_words))  # All meaningful words
+
+            # Extract keywords from column names
+            for col_name in table_info.get("columns", {}).keys():
+                col_words = col_name.replace("_", " ").split()
+                for word in col_words:
+                    if word.lower() not in exclude_words and len(word) > 2:
+                        keywords.add(word.lower())
+
+        self.dynamic_keywords = keywords
+
+        # Add dynamic keywords to primary_keywords list
+        self.primary_keywords.extend(list(keywords))
+
+        # Remove duplicates
+        self.primary_keywords = list(set(self.primary_keywords))
+
+        logger.info(f"✓ Loaded {len(keywords)} dynamic keywords from schema: {sorted(list(keywords))[:20]}...")
     
     # ═══════════════════════════════════════════════════════════════════════
     # LAYER 1: SECURITY THREATS

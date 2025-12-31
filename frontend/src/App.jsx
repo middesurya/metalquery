@@ -196,7 +196,7 @@ const ImageGallery = ({ images }) => {
     if (!images || images.length === 0) return null;
 
     // NLP service URL for images
-    const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
+    const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8004';
 
     return (
         <div className="image-gallery">
@@ -296,29 +296,6 @@ const ChatMessage = ({ message, isUser, onEdit, onImageClick }) => {
                     <SQLDisplay sql={message.sql} />
                 )}
 
-                {/* Multimodal: Display images from BRD documents */}
-                {message.images && message.images.length > 0 && (
-                    <div className="images-section">
-                        <div className="images-header">
-                            <span className="images-icon">📷</span>
-                            <span>Related Screenshots ({message.images.length})</span>
-                        </div>
-                        <div className="images-gallery">
-                            {message.images.map((img, idx) => (
-                                <div key={idx} className="image-container">
-                                    <img
-                                        src={img.data}
-                                        alt={`BRD Screenshot ${idx + 1}`}
-                                        className="brd-image"
-                                        onClick={() => onImageClick && onImageClick(message.images, idx)}
-                                        title={`From: ${img.source || 'BRD Document'} - Click to enlarge`}
-                                    />
-                                    <span className="image-source">{img.source || 'BRD'}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 <div className="message-time">
                     {new Date(message.timestamp).toLocaleTimeString()}
