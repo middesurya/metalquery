@@ -543,232 +543,295 @@ TOTAL: 29 tables with 50+ foreign key relationships
 
 
 # ============================================================
-# FEW-SHOT EXAMPLES
+# FEW-SHOT EXAMPLES (80+ Examples in 10 Categories)
 # ============================================================
 
 FEW_SHOT_EXAMPLES = [
-    # ========== SIMPLE AGGREGATIONS ==========
-    {"q": "Average OEE for Furnace 1 last month",
-     "sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
-    
-    {"q": "Total downtime by furnace",
-     "sql": "SELECT furnace_no, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY furnace_no ORDER BY total_downtime DESC"},
-    
-    {"q": "Which furnace has highest OEE?",
-     "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC LIMIT 1"},
-    
-    {"q": "What is furnace health", 
-     "sql": "SELECT furnace_no, AVG(oee_percentage) as health_score FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY health_score DESC"},
-    
-    {"q": "Compare OEE by furnace", 
-     "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC"},
-    
-    {"q": "What is the average yield for Furnace 2?", 
-     "sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 2"},
-    
-    {"q": "Total downtime for Furnace 1 last 30 days", 
-     "sql": "SELECT SUM(downtime_hours) FROM kpi_downtime_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
-    
-    {"q": "Total downtime last year", 
-     "sql": "SELECT SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '1 year'"},
-    
-    {"q": "Total energy used last week", 
-     "sql": "SELECT furnace_no, SUM(energy_used) as total FROM kpi_energy_used_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY furnace_no"},
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 1: SIMPLE AGGREGATION (12)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Average OEE for all furnaces", "sql": "SELECT AVG(oee_percentage) as average_oee FROM kpi_overall_equipment_efficiency_data"},
+    {"q": "Average OEE for Furnace 1", "sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1"},
+    {"q": "Average OEE for Furnace 1 last 30 days", "sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
+    {"q": "Average OEE by furnace", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC"},
+    {"q": "Total downtime by furnace", "sql": "SELECT furnace_no, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY furnace_no ORDER BY total_downtime DESC"},
+    {"q": "Total energy consumption by furnace", "sql": "SELECT furnace_no, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY furnace_no ORDER BY total_energy DESC"},
+    {"q": "Which furnace has highest OEE?", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC LIMIT 1"},
+    {"q": "Total quantity produced by furnace", "sql": "SELECT furnace_no, SUM(quantity_produced) as total_qty FROM kpi_quantity_produced_data GROUP BY furnace_no ORDER BY total_qty DESC"},
+    {"q": "Average yield for Furnace 2", "sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 2"},
+    {"q": "Total downtime last year", "sql": "SELECT SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '1 year'"},
+    {"q": "Average downtime per furnace", "sql": "SELECT furnace_no, AVG(downtime_hours) as avg_downtime FROM kpi_downtime_data GROUP BY furnace_no"},
+    {"q": "Total production for Furnace 1 last month", "sql": "SELECT SUM(quantity_produced) as total_production FROM kpi_quantity_produced_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
 
-    
-    {"q": "Average MTBF by furnace", 
-     "sql": "SELECT furnace_no, AVG(mtbf_hours) as avg_mtbf FROM kpi_mean_time_between_failures_data GROUP BY furnace_no"},
-    
-    {"q": "Total production for Furnace 1 in January 2025", 
-     "sql": "SELECT SUM(cast_weight) as total_production FROM core_process_tap_production WHERE tap_production_datetime BETWEEN '2025-01-01' AND '2025-01-31'"},
-    
-    # ========== TREND QUERIES (NO AGGREGATION) ==========
-    {"q": "Show OEE trend for Furnace 2",
-     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Recent tap production",
-     "sql": "SELECT tap_id, cast_weight, energy, tap_production_datetime FROM core_process_tap_production ORDER BY tap_production_datetime DESC LIMIT 20"},
-    
-    {"q": "Show OEE trend last week", 
-     "sql": "SELECT date, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' ORDER BY date DESC"},
-    
-    {"q": "Defect rate trend for Furnace 2", 
-     "sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Show yield data for last month", 
-     "sql": "SELECT date, furnace_no, yield_percentage FROM kpi_yield_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC"},
-    
-    {"q": "List all furnaces", 
-     "sql": "SELECT furnace_no, furnace_description, is_active FROM furnace_furnaceconfig ORDER BY furnace_no"},
-    
-    {"q": "Show downtime events for Furnace 1", 
-     "sql": "SELECT obs_start_dt, obs_end_dt, downtime_hours, reason_id FROM log_book_furnace_down_time_event WHERE furnace_no = 1 ORDER BY obs_start_dt DESC LIMIT 50"},
-    
-    {"q": "Crucible diameter and depth for Furnace 1", 
-     "sql": "SELECT crucible_diameter, crucible_depth FROM furnace_config_parameters WHERE furnace_config_id = 1"},
-    
-    {"q": "Show MTTR data for Furnace 2", 
-     "sql": "SELECT date, mttr_hours FROM kpi_mean_time_to_repair_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Show all downtime reasons", 
-     "sql": "SELECT reason_name, reason_code FROM log_book_reasons"},
-    
-    {"q": "Show downtime types", 
-     "sql": "SELECT name, down_time_type_code FROM log_book_downtime_type_master"},
-    
-    # ========== MULTI-TABLE JOINs (NEW in v3.0) ==========
-    {"q": "Average OEE by furnace with furnace names",
-     "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN furnace_furnaceconfig f ON k.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
-    
-    {"q": "Tap production by plant and furnace",
-     "sql": "SELECT p.plant_name, f.furnace_no, f.furnace_description, COUNT(t.tap_id) as total_taps, SUM(tp.cast_weight) as total_weight FROM core_process_tap_production tp JOIN core_process_tap_process t ON tp.tap_id = t.tap_id JOIN furnace_furnaceconfig f ON t.furnace_no = f.furnace_no JOIN plant_plant p ON tp.plant_id = p.id GROUP BY p.id, p.plant_name, f.furnace_no, f.furnace_description ORDER BY total_weight DESC"},
-    
-    {"q": "Downtime events with reasons for Furnace 1",
-     "sql": "SELECT d.obs_start_dt, d.obs_end_dt, d.downtime_hours, r.reason_name, dt.name as downtime_type FROM log_book_furnace_down_time_event d LEFT JOIN log_book_reasons r ON d.reason_id = r.id LEFT JOIN log_book_downtime_type_master dt ON d.downtime_type_id = dt.id WHERE d.furnace_no = 1 ORDER BY d.obs_start_dt DESC LIMIT 50"},
-    
-    {"q": "Compare OEE and yield by furnace last month",
-     "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k1.oee_percentage) as avg_oee, AVG(k2.yield_percentage) as avg_yield FROM kpi_overall_equipment_efficiency_data k1 JOIN kpi_yield_data k2 ON k1.furnace_no = k2.furnace_no AND k1.date = k2.date JOIN furnace_furnaceconfig f ON k1.furnace_no = f.furnace_no WHERE k1.date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
-    
-    {"q": "OEE by plant",
-     "sql": "SELECT p.plant_name, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN plant_plant p ON k.plant_id = p.id GROUP BY p.id, p.plant_name ORDER BY avg_oee DESC"},
-    
-    {"q": "Production with furnace details",
-     "sql": "SELECT f.furnace_no, f.furnace_description, SUM(tp.cast_weight) as total_weight, AVG(tp.energy_efficiency) as avg_efficiency FROM core_process_tap_production tp JOIN core_process_tap_process t ON tp.tap_id = t.tap_id JOIN furnace_furnaceconfig f ON t.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY total_weight DESC"},
-    
-    # ========== AGGREGATION OVERRIDE EXAMPLES (CRITICAL) ==========
-    {"q": "Total OEE for Furnace 1 last month", 
-     "sql": "SELECT SUM(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
-    
-    {"q": "Average downtime per furnace", 
-     "sql": "SELECT furnace_no, AVG(downtime_hours) FROM kpi_downtime_data GROUP BY furnace_no"},
-    
-    {"q": "Average and total energy used by furnace", 
-     "sql": "SELECT furnace_no, AVG(energy_used) as avg_energy, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY furnace_no"},
-    
-    {"q": "How many downtime events for Furnace 1", 
-     "sql": "SELECT COUNT(*) FROM kpi_downtime_data WHERE furnace_no = 1"},
-    
-    {"q": "Total and average yield for Furnace 2 in January", 
-     "sql": "SELECT SUM(yield_percentage) as total_yield, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE furnace_no = 2 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
-    
-    # ========== VARCHAR COLUMN EXAMPLES (CRITICAL - applies to ALL 29 tables) ==========
-    # shift_id is VARCHAR - ALWAYS use string quotes '4', '12', '20' NOT integers
-    {"q": "OEE for shift 4",
-     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Compare downtime between shifts 4, 12, and 20",
-     "sql": "SELECT shift_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE shift_id IN ('4', '12', '20') GROUP BY shift_id ORDER BY total_downtime DESC"},
-    
-    {"q": "Which shift has highest yield",
-     "sql": "SELECT shift_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY shift_id ORDER BY avg_yield DESC LIMIT 1"},
-    
-    {"q": "Average OEE per shift",
-     "sql": "SELECT shift_id, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY shift_id ORDER BY avg_oee DESC"},
-    
-    {"q": "Energy used by shift 12 last week",
-     "sql": "SELECT date, SUM(energy_used) as total_energy FROM kpi_energy_used_data WHERE shift_id = '12' AND date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date DESC"},
-    
-    {"q": "Defect rate for shift 20",
-     "sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE shift_id = '20' ORDER BY date DESC LIMIT 100"},
-    
-    # machine_id is VARCHAR - ALWAYS use string quotes 'FURNACE', 'CAST_BAY', etc.
-    {"q": "OEE for machine FURNACE",
-     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Compare downtime between FURNACE and ELECTROD machines",
-     "sql": "SELECT machine_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE machine_id IN ('FURNACE', 'ELECTROD') GROUP BY machine_id ORDER BY total_downtime DESC"},
-    
-    {"q": "Which machine has highest efficiency",
-     "sql": "SELECT machine_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data GROUP BY machine_id ORDER BY avg_efficiency DESC LIMIT 1"},
-    
-    {"q": "Average yield per machine",
-     "sql": "SELECT machine_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY machine_id ORDER BY avg_yield DESC"},
-    
-    {"q": "MTBF for machine CAST_BAY",
-     "sql": "SELECT date, mtbf_hours FROM kpi_mean_time_between_failures_data WHERE machine_id = 'CAST_BAY' ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Top 5 machines by energy consumption",
-     "sql": "SELECT machine_id, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY machine_id ORDER BY total_energy DESC LIMIT 5"},
-    
-    # product_type_id is VARCHAR - ALWAYS use string quotes 'M004', 'MET30', etc.
-    {"q": "OEE for product M004",
-     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE product_type_id = 'M004' ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Compare yield between MET30 and MET32",
-     "sql": "SELECT product_type_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE product_type_id IN ('MET30', 'MET32') GROUP BY product_type_id ORDER BY avg_yield DESC"},
-    
-    {"q": "Which product has highest defect rate",
-     "sql": "SELECT product_type_id, AVG(defect_rate) as avg_defect_rate FROM kpi_defect_rate_data GROUP BY product_type_id ORDER BY avg_defect_rate DESC LIMIT 1"},
-    
-    {"q": "Downtime by product type",
-     "sql": "SELECT product_type_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY product_type_id ORDER BY total_downtime DESC"},
-    
-    # Combined filters (shift + machine + product) - ALL use string quotes
-    {"q": "OEE for shift 4 on machine FURNACE",
-     "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' AND machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
-    
-    {"q": "Downtime for product MET30 in shift 12",
-     "sql": "SELECT date, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE product_type_id = 'MET30' AND shift_id = '12' GROUP BY date ORDER BY date DESC"},
-    
-    {"q": "Compare efficiency between shifts for machine ELECTROD",
-     "sql": "SELECT shift_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data WHERE machine_id = 'ELECTROD' GROUP BY shift_id ORDER BY avg_efficiency DESC"},
-    
-    # ========== GENERIC KPI QUERY PATTERNS (Works for all 20 KPI tables) ==========
-    # Average/Total by date
-    {"q": "Average OEE per day",
-     "sql": "SELECT date, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY date ORDER BY date DESC"},
-    
-    {"q": "Total downtime per day",
-     "sql": "SELECT date, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY date ORDER BY date DESC"},
-    
-    # Records above/below threshold
-    {"q": "Show OEE records above 90",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE oee_percentage > 90 ORDER BY oee_percentage DESC LIMIT 100"},
-    
-    {"q": "Downtime events above 10 hours",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data WHERE downtime_hours > 10 ORDER BY downtime_hours DESC LIMIT 100"},
-    
-    {"q": "Defect rate above 5 percent",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, defect_rate FROM kpi_defect_rate_data WHERE defect_rate > 5 ORDER BY defect_rate DESC LIMIT 100"},
-    
-    # Min/Max queries
-    {"q": "Highest OEE recorded",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data ORDER BY oee_percentage DESC LIMIT 1"},
-    
-    {"q": "Lowest yield recorded",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, yield_percentage FROM kpi_yield_data ORDER BY yield_percentage ASC LIMIT 1"},
-    
-    {"q": "Max downtime event",
-     "sql": "SELECT date, shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data ORDER BY downtime_hours DESC LIMIT 1"},
-    
-    # Statistics (min, max, avg)
-    {"q": "Min, max, and average OEE",
-     "sql": "SELECT MIN(oee_percentage) as min_oee, MAX(oee_percentage) as max_oee, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data"},
-    
-    {"q": "Statistics for downtime",
-     "sql": "SELECT MIN(downtime_hours) as min_downtime, MAX(downtime_hours) as max_downtime, AVG(downtime_hours) as avg_downtime, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data"},
-    
-    # By specific date
-    {"q": "OEE on 2024-01-07",
-     "sql": "SELECT shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date = '2024-01-07' ORDER BY oee_percentage DESC"},
-    
-    {"q": "Downtime on 2024-01-08",
-     "sql": "SELECT shift_id, furnace_no, machine_id, downtime_hours FROM kpi_downtime_data WHERE date = '2024-01-08' ORDER BY downtime_hours DESC"},
-    
-    # Date range queries
-    {"q": "OEE between January 7 and January 9 2024",
-     "sql": "SELECT date, shift_id, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date BETWEEN '2024-01-07' AND '2024-01-09' ORDER BY date, oee_percentage DESC"},
-    
-    # ========== ERROR EXAMPLES ==========
-    {"q": "production",
-     "sql": "ERROR: Ambiguous query. Please specify metric (e.g., quantity produced, production efficiency, tap production)."},
-    
-    {"q": "OEE and downtime comparison",
-     "sql": "ERROR: Multi-metric queries not yet supported. Please ask one metric at a time."},
-    
-    {"q": "What happened yesterday", 
-     "sql": "ERROR: Cannot map question to a specific table. Please specify what data you need (e.g., OEE, downtime, production)."},
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 2: TREND ANALYSIS - NO AGGREGATION (12)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Show OEE trend for Furnace 2", "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+    {"q": "Display downtime trend last 30 days", "sql": "SELECT date, furnace_no, downtime_hours FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC"},
+    {"q": "Recent defect rate data", "sql": "SELECT date, shift_id, furnace_no, defect_rate FROM kpi_defect_rate_data ORDER BY date DESC LIMIT 50"},
+    {"q": "Show OEE trend last week", "sql": "SELECT date, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' ORDER BY date DESC"},
+    {"q": "List all furnaces", "sql": "SELECT furnace_no, furnace_description, is_active FROM furnace_furnaceconfig ORDER BY furnace_no"},
+    {"q": "Show downtime events for Furnace 1", "sql": "SELECT obs_start_dt, obs_end_dt, downtime_hours FROM log_book_furnace_down_time_event WHERE furnace_no = 1 ORDER BY obs_start_dt DESC LIMIT 50"},
+    {"q": "Recent tap production data", "sql": "SELECT tap_id, cast_weight, energy, tap_production_datetime FROM core_process_tap_production ORDER BY tap_production_datetime DESC LIMIT 20"},
+    {"q": "Show yield data for last month", "sql": "SELECT date, furnace_no, yield_percentage FROM kpi_yield_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC"},
+    {"q": "Display energy efficiency trend", "sql": "SELECT date, furnace_no, energy_efficiency FROM kpi_energy_efficiency_data ORDER BY date DESC LIMIT 100"},
+    {"q": "Show MTTR data for Furnace 2", "sql": "SELECT date, mttr_hours FROM kpi_mean_time_to_repair_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+    {"q": "List recent quality issues", "sql": "SELECT date, furnace_no, defect_rate FROM kpi_defect_rate_data ORDER BY date DESC LIMIT 100"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 3: COMPARATIVE ANALYSIS (10)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Compare OEE between Furnace 1 and 2", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data WHERE furnace_no IN (1, 2) GROUP BY furnace_no ORDER BY avg_oee DESC"},
+    {"q": "Which shift has highest yield?", "sql": "SELECT shift_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY shift_id ORDER BY avg_yield DESC LIMIT 1"},
+    {"q": "Compare all furnaces by OEE", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee, MAX(oee_percentage) as max_oee, MIN(oee_percentage) as min_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC"},
+    {"q": "Rank furnaces by defect rate", "sql": "SELECT furnace_no, AVG(defect_rate) as avg_defect FROM kpi_defect_rate_data GROUP BY furnace_no ORDER BY avg_defect DESC"},
+    {"q": "Compare downtime between machines", "sql": "SELECT machine_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY machine_id ORDER BY total_downtime DESC"},
+    {"q": "Which product type has highest yield?", "sql": "SELECT product_type_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY product_type_id ORDER BY avg_yield DESC LIMIT 1"},
+    {"q": "Compare energy efficiency by furnace", "sql": "SELECT furnace_no, AVG(energy_efficiency) as avg_efficiency FROM kpi_energy_efficiency_data GROUP BY furnace_no ORDER BY avg_efficiency"},
+    {"q": "Production efficiency by shift", "sql": "SELECT shift_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data GROUP BY shift_id ORDER BY avg_efficiency DESC"},
+    {"q": "Compare MTBF by furnace", "sql": "SELECT furnace_no, AVG(mtbf_hours) as avg_mtbf FROM kpi_mean_time_between_failures_data GROUP BY furnace_no ORDER BY avg_mtbf DESC"},
+    {"q": "Best and worst shift by OEE", "sql": "SELECT shift_id, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY shift_id ORDER BY avg_oee DESC"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 4: MULTI-METRIC JOINS (8)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Average OEE by furnace with names", "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN furnace_furnaceconfig f ON k.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
+    {"q": "Tap production by tap status", "sql": "SELECT t.tap_status, COUNT(t.tap_id) as tap_count, SUM(tp.cast_weight) as total_weight FROM core_process_tap_process t JOIN core_process_tap_production tp ON t.tap_id = tp.tap_id GROUP BY t.tap_status ORDER BY tap_count DESC"},
+    {"q": "Downtime events with reasons for Furnace 1", "sql": "SELECT d.obs_start_dt, d.obs_end_dt, d.downtime_hours, r.reason_name FROM log_book_furnace_down_time_event d LEFT JOIN log_book_reasons r ON d.reason_id = r.id WHERE d.furnace_no = 1 ORDER BY d.obs_start_dt DESC LIMIT 50"},
+    {"q": "OEE and yield by furnace last month", "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k1.oee_percentage) as avg_oee, AVG(k2.yield_percentage) as avg_yield FROM kpi_overall_equipment_efficiency_data k1 JOIN kpi_yield_data k2 ON k1.furnace_no = k2.furnace_no AND k1.date = k2.date JOIN furnace_furnaceconfig f ON k1.furnace_no = f.furnace_no WHERE k1.date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
+    {"q": "Production with furnace details", "sql": "SELECT f.furnace_no, f.furnace_description, SUM(tp.cast_weight) as total_weight, AVG(tp.energy_efficiency) as avg_efficiency FROM core_process_tap_production tp JOIN core_process_tap_process t ON tp.tap_id = t.tap_id JOIN furnace_furnaceconfig f ON t.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY total_weight DESC"},
+    {"q": "OEE by plant", "sql": "SELECT p.plant_name, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN plant_plant p ON k.plant_id = p.id GROUP BY p.id, p.plant_name ORDER BY avg_oee DESC"},
+    {"q": "Energy usage by furnace with config", "sql": "SELECT f.furnace_no, f.furnace_description, SUM(k.energy_used) as total_energy FROM kpi_energy_used_data k JOIN furnace_furnaceconfig f ON k.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY total_energy DESC"},
+    {"q": "Tap grading with tap status", "sql": "SELECT t.tap_status, COUNT(DISTINCT g.tap_id) as graded_taps FROM core_process_tap_grading g JOIN core_process_tap_process t ON g.tap_id = t.tap_id GROUP BY t.tap_status"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 5: TEMPORAL COMPARISON (6)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Compare OEE January vs February 2025", "sql": "SELECT EXTRACT(MONTH FROM date) as month, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data WHERE EXTRACT(YEAR FROM date) = 2025 AND EXTRACT(MONTH FROM date) IN (1, 2) GROUP BY EXTRACT(MONTH FROM date) ORDER BY month"},
+    {"q": "Week over week downtime comparison", "sql": "SELECT CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN 'Current Week' ELSE 'Previous Week' END as period, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '14 days' GROUP BY period"},
+    {"q": "Compare last 2 months of OEE", "sql": "SELECT DATE_TRUNC('month', date)::DATE as month, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '60 days' GROUP BY DATE_TRUNC('month', date) ORDER BY month DESC"},
+    {"q": "Monthly energy trend", "sql": "SELECT DATE_TRUNC('month', date)::DATE as month, SUM(energy_used) as monthly_total FROM kpi_energy_used_data GROUP BY DATE_TRUNC('month', date) ORDER BY month DESC"},
+    {"q": "This month vs last month downtime", "sql": "SELECT CASE WHEN date >= CURRENT_DATE - INTERVAL '30 days' THEN 'This Month' ELSE 'Last Month' END as period, SUM(downtime_hours) as total FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '60 days' GROUP BY period"},
+    {"q": "Year to date production", "sql": "SELECT DATE_TRUNC('month', tap_production_datetime)::DATE as month, SUM(cast_weight) as monthly_production FROM core_process_tap_production WHERE EXTRACT(YEAR FROM tap_production_datetime) = EXTRACT(YEAR FROM CURRENT_DATE) GROUP BY DATE_TRUNC('month', tap_production_datetime) ORDER BY month DESC"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 6: THRESHOLD-BASED (6)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Show OEE records above 90%", "sql": "SELECT date, furnace_no, shift_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE oee_percentage > 90 ORDER BY oee_percentage DESC LIMIT 100"},
+    {"q": "Downtime events exceeding 8 hours", "sql": "SELECT obs_start_dt, furnace_no, downtime_hours FROM log_book_furnace_down_time_event WHERE downtime_hours > 8 ORDER BY downtime_hours DESC"},
+    {"q": "Furnaces with low efficiency below 80%", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no HAVING AVG(oee_percentage) < 80"},
+    {"q": "Defect rate above 5 percent", "sql": "SELECT date, shift_id, furnace_no, defect_rate FROM kpi_defect_rate_data WHERE defect_rate > 5 ORDER BY defect_rate DESC LIMIT 100"},
+    {"q": "Energy usage above average", "sql": "SELECT furnace_no, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY furnace_no HAVING SUM(energy_used) > (SELECT AVG(energy_used) FROM kpi_energy_used_data)"},
+    {"q": "Low yield furnaces below 85%", "sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY furnace_no HAVING AVG(yield_percentage) < 85 ORDER BY avg_yield"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 7: RANKING / TOP-N (7)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Top 5 furnaces by production", "sql": "SELECT furnace_no, SUM(cast_weight) as total_production FROM core_process_tap_production GROUP BY furnace_no ORDER BY total_production DESC LIMIT 5"},
+    {"q": "Bottom 3 furnaces by yield", "sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY furnace_no ORDER BY avg_yield ASC LIMIT 3"},
+    {"q": "Top 10 shifts by output", "sql": "SELECT shift_id, SUM(quantity_produced) as total_output FROM kpi_quantity_produced_data GROUP BY shift_id ORDER BY total_output DESC LIMIT 10"},
+    {"q": "Worst furnace by OEE", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee ASC LIMIT 1"},
+    {"q": "Top 3 machines by energy", "sql": "SELECT machine_id, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY machine_id ORDER BY total_energy DESC LIMIT 3"},
+    {"q": "Best shift by efficiency", "sql": "SELECT shift_id, AVG(production_efficiency_percentage) as avg_efficiency FROM kpi_production_efficiency_data GROUP BY shift_id ORDER BY avg_efficiency DESC LIMIT 1"},
+    {"q": "Most reliable furnace", "sql": "SELECT furnace_no, AVG(mtbf_hours) as avg_mtbf FROM kpi_mean_time_between_failures_data GROUP BY furnace_no ORDER BY avg_mtbf DESC LIMIT 1"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 8: STATISTICAL (5)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "OEE statistics", "sql": "SELECT MIN(oee_percentage) as min_oee, MAX(oee_percentage) as max_oee, AVG(oee_percentage) as avg_oee, STDDEV(oee_percentage) as stddev_oee FROM kpi_overall_equipment_efficiency_data"},
+    {"q": "Downtime statistics by furnace", "sql": "SELECT furnace_no, MIN(downtime_hours) as min, MAX(downtime_hours) as max, AVG(downtime_hours) as avg, SUM(downtime_hours) as total, COUNT(*) as count FROM kpi_downtime_data GROUP BY furnace_no"},
+    {"q": "Energy efficiency range", "sql": "SELECT MIN(energy_efficiency) as min_eff, MAX(energy_efficiency) as max_eff, AVG(energy_efficiency) as avg_eff FROM kpi_energy_efficiency_data"},
+    {"q": "Yield statistics by furnace", "sql": "SELECT furnace_no, AVG(yield_percentage) as avg_yield, STDDEV(yield_percentage) as stddev_yield, MIN(yield_percentage) as min_yield, MAX(yield_percentage) as max_yield FROM kpi_yield_data GROUP BY furnace_no"},
+    {"q": "Production quantity statistics", "sql": "SELECT AVG(quantity_produced) as avg_qty, MAX(quantity_produced) as max_qty, MIN(quantity_produced) as min_qty, SUM(quantity_produced) as total_qty FROM kpi_quantity_produced_data"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 9: TIME-SERIES BUCKETING (6)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Average OEE per day", "sql": "SELECT DATE_TRUNC('day', date)::DATE as day, AVG(oee_percentage) as daily_avg FROM kpi_overall_equipment_efficiency_data GROUP BY DATE_TRUNC('day', date) ORDER BY day DESC"},
+    {"q": "Total production per week", "sql": "SELECT DATE_TRUNC('week', tap_production_datetime)::DATE as week, SUM(cast_weight) as weekly_total FROM core_process_tap_production GROUP BY DATE_TRUNC('week', tap_production_datetime) ORDER BY week DESC"},
+    {"q": "Monthly energy by furnace", "sql": "SELECT DATE_TRUNC('month', date)::DATE as month, furnace_no, SUM(energy_used) as monthly_total FROM kpi_energy_used_data GROUP BY DATE_TRUNC('month', date), furnace_no ORDER BY month DESC, furnace_no"},
+    {"q": "Daily downtime summary", "sql": "SELECT DATE_TRUNC('day', date)::DATE as day, SUM(downtime_hours) as daily_downtime, COUNT(*) as event_count FROM kpi_downtime_data GROUP BY DATE_TRUNC('day', date) ORDER BY day DESC"},
+    {"q": "Weekly yield trend", "sql": "SELECT DATE_TRUNC('week', date)::DATE as week, AVG(yield_percentage) as weekly_avg_yield FROM kpi_yield_data GROUP BY DATE_TRUNC('week', date) ORDER BY week DESC"},
+    {"q": "Daily tap production", "sql": "SELECT DATE_TRUNC('day', tap_production_datetime)::DATE as production_date, COUNT(DISTINCT tap_id) as tap_count, SUM(cast_weight) as daily_weight FROM core_process_tap_production GROUP BY DATE_TRUNC('day', tap_production_datetime) ORDER BY production_date DESC"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TYPE 10: ANOMALY DETECTION (5)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "Unusually high downtime", "sql": "SELECT obs_start_dt, furnace_no, downtime_hours FROM log_book_furnace_down_time_event WHERE downtime_hours > (SELECT AVG(downtime_hours) + 2 * STDDEV(downtime_hours) FROM log_book_furnace_down_time_event) ORDER BY downtime_hours DESC"},
+    {"q": "OEE outliers below normal", "sql": "SELECT date, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE oee_percentage < (SELECT AVG(oee_percentage) - 2 * STDDEV(oee_percentage) FROM kpi_overall_equipment_efficiency_data) ORDER BY oee_percentage"},
+    {"q": "Unusually low yield", "sql": "SELECT date, furnace_no, yield_percentage FROM kpi_yield_data WHERE yield_percentage < (SELECT AVG(yield_percentage) - 1.5 * STDDEV(yield_percentage) FROM kpi_yield_data) ORDER BY yield_percentage"},
+    {"q": "Energy spikes above normal", "sql": "SELECT date, furnace_no, energy_used FROM kpi_energy_used_data WHERE energy_used > (SELECT AVG(energy_used) + 2 * STDDEV(energy_used) FROM kpi_energy_used_data) ORDER BY energy_used DESC"},
+    {"q": "High defect rate anomalies", "sql": "SELECT date, furnace_no, defect_rate FROM kpi_defect_rate_data WHERE defect_rate > (SELECT AVG(defect_rate) + 1.5 * STDDEV(defect_rate) FROM kpi_defect_rate_data) ORDER BY defect_rate DESC"},
+
+    # ═══════════════════════════════════════════════════════════════════
+    # VARCHAR FILTERING - CRITICAL (5)
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "OEE for shift 4", "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' ORDER BY date DESC LIMIT 100"},
+    {"q": "Compare shifts 4, 12, and 20 downtime", "sql": "SELECT shift_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE shift_id IN ('4', '12', '20') GROUP BY shift_id ORDER BY total_downtime DESC"},
+    {"q": "OEE for machine FURNACE", "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
+    {"q": "Production for product M004", "sql": "SELECT date, quantity_produced FROM kpi_quantity_produced_data WHERE product_type_id = 'M004' ORDER BY date DESC LIMIT 100"},
+    {"q": "Compare products MET30 and MET32 yield", "sql": "SELECT product_type_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE product_type_id IN ('MET30', 'MET32') GROUP BY product_type_id ORDER BY avg_yield DESC"},
 ]
+
+# ============================================================
+# ORIGINAL EXAMPLES (PRESERVED AS COMMENTS)
+# ============================================================
+# The following examples were the original set before enhancement.
+# Kept for reference and rollback purposes.
+# ============================================================
+
+# ORIGINAL_FEW_SHOT_EXAMPLES = [
+#     # ========== SIMPLE AGGREGATIONS ==========
+#     {"q": "Average OEE for Furnace 1 last month",
+#      "sql": "SELECT AVG(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
+#     
+#     {"q": "Total downtime by furnace",
+#      "sql": "SELECT furnace_no, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data GROUP BY furnace_no ORDER BY total_downtime DESC"},
+#     
+#     {"q": "Which furnace has highest OEE?",
+#      "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC LIMIT 1"},
+#     
+#     {"q": "What is furnace health", 
+#      "sql": "SELECT furnace_no, AVG(oee_percentage) as health_score FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY health_score DESC"},
+#     
+#     {"q": "Compare OEE by furnace", 
+#      "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY furnace_no ORDER BY avg_oee DESC"},
+#     
+#     {"q": "What is the average yield for Furnace 2?", 
+#      "sql": "SELECT AVG(yield_percentage) FROM kpi_yield_data WHERE furnace_no = 2"},
+#     
+#     {"q": "Total downtime for Furnace 1 last 30 days", 
+#      "sql": "SELECT SUM(downtime_hours) FROM kpi_downtime_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
+#     
+#     {"q": "Total downtime last year", 
+#      "sql": "SELECT SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE date >= CURRENT_DATE - INTERVAL '1 year'"},
+#     
+#     {"q": "Total energy used last week", 
+#      "sql": "SELECT furnace_no, SUM(energy_used) as total FROM kpi_energy_used_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY furnace_no"},
+#     
+#     {"q": "Average MTBF by furnace", 
+#      "sql": "SELECT furnace_no, AVG(mtbf_hours) as avg_mtbf FROM kpi_mean_time_between_failures_data GROUP BY furnace_no"},
+#     
+#     {"q": "Total production for Furnace 1 in January 2025", 
+#      "sql": "SELECT SUM(cast_weight) as total_production FROM core_process_tap_production WHERE tap_production_datetime BETWEEN '2025-01-01' AND '2025-01-31'"},
+#     
+#     # ========== TREND QUERIES (NO AGGREGATION) ==========
+#     {"q": "Show OEE trend for Furnace 2",
+#      "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Recent tap production",
+#      "sql": "SELECT tap_id, cast_weight, energy, tap_production_datetime FROM core_process_tap_production ORDER BY tap_production_datetime DESC LIMIT 20"},
+#     
+#     {"q": "Show OEE trend last week", 
+#      "sql": "SELECT date, furnace_no, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date >= CURRENT_DATE - INTERVAL '7 days' ORDER BY date DESC"},
+#     
+#     {"q": "Defect rate trend for Furnace 2", 
+#      "sql": "SELECT date, defect_rate FROM kpi_defect_rate_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Show yield data for last month", 
+#      "sql": "SELECT date, furnace_no, yield_percentage FROM kpi_yield_data WHERE date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY date DESC"},
+#     
+#     {"q": "List all furnaces", 
+#      "sql": "SELECT furnace_no, furnace_description, is_active FROM furnace_furnaceconfig ORDER BY furnace_no"},
+#     
+#     {"q": "Show downtime events for Furnace 1", 
+#      "sql": "SELECT obs_start_dt, obs_end_dt, downtime_hours, reason_id FROM log_book_furnace_down_time_event WHERE furnace_no = 1 ORDER BY obs_start_dt DESC LIMIT 50"},
+#     
+#     {"q": "Crucible diameter and depth for Furnace 1", 
+#      "sql": "SELECT crucible_diameter, crucible_depth FROM furnace_config_parameters WHERE furnace_config_id = 1"},
+#     
+#     {"q": "Show MTTR data for Furnace 2", 
+#      "sql": "SELECT date, mttr_hours FROM kpi_mean_time_to_repair_data WHERE furnace_no = 2 ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Show all downtime reasons", 
+#      "sql": "SELECT reason_name, reason_code FROM log_book_reasons"},
+#     
+#     {"q": "Show downtime types", 
+#      "sql": "SELECT name, down_time_type_code FROM log_book_downtime_type_master"},
+#     
+#     # ========== MULTI-TABLE JOINs ==========
+#     {"q": "Average OEE by furnace with furnace names",
+#      "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN furnace_furnaceconfig f ON k.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
+#     
+#     {"q": "Tap production by plant and furnace",
+#      "sql": "SELECT p.plant_name, f.furnace_no, f.furnace_description, COUNT(t.tap_id) as total_taps, SUM(tp.cast_weight) as total_weight FROM core_process_tap_production tp JOIN core_process_tap_process t ON tp.tap_id = t.tap_id JOIN furnace_furnaceconfig f ON t.furnace_no = f.furnace_no JOIN plant_plant p ON tp.plant_id = p.id GROUP BY p.id, p.plant_name, f.furnace_no, f.furnace_description ORDER BY total_weight DESC"},
+#     
+#     {"q": "Downtime events with reasons for Furnace 1",
+#      "sql": "SELECT d.obs_start_dt, d.obs_end_dt, d.downtime_hours, r.reason_name, dt.name as downtime_type FROM log_book_furnace_down_time_event d LEFT JOIN log_book_reasons r ON d.reason_id = r.id LEFT JOIN log_book_downtime_type_master dt ON d.downtime_type_id = dt.id WHERE d.furnace_no = 1 ORDER BY d.obs_start_dt DESC LIMIT 50"},
+#     
+#     {"q": "Compare OEE and yield by furnace last month",
+#      "sql": "SELECT f.furnace_no, f.furnace_description, AVG(k1.oee_percentage) as avg_oee, AVG(k2.yield_percentage) as avg_yield FROM kpi_overall_equipment_efficiency_data k1 JOIN kpi_yield_data k2 ON k1.furnace_no = k2.furnace_no AND k1.date = k2.date JOIN furnace_furnaceconfig f ON k1.furnace_no = f.furnace_no WHERE k1.date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY f.furnace_no, f.furnace_description ORDER BY avg_oee DESC"},
+#     
+#     {"q": "OEE by plant",
+#      "sql": "SELECT p.plant_name, AVG(k.oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data k JOIN plant_plant p ON k.plant_id = p.id GROUP BY p.id, p.plant_name ORDER BY avg_oee DESC"},
+#     
+#     {"q": "Production with furnace details",
+#      "sql": "SELECT f.furnace_no, f.furnace_description, SUM(tp.cast_weight) as total_weight, AVG(tp.energy_efficiency) as avg_efficiency FROM core_process_tap_production tp JOIN core_process_tap_process t ON tp.tap_id = t.tap_id JOIN furnace_furnaceconfig f ON t.furnace_no = f.furnace_no GROUP BY f.furnace_no, f.furnace_description ORDER BY total_weight DESC"},
+#     
+#     # ========== AGGREGATION OVERRIDE EXAMPLES ==========
+#     {"q": "Total OEE for Furnace 1 last month", 
+#      "sql": "SELECT SUM(oee_percentage) FROM kpi_overall_equipment_efficiency_data WHERE furnace_no = 1 AND date >= CURRENT_DATE - INTERVAL '30 days'"},
+#     
+#     {"q": "Average downtime per furnace", 
+#      "sql": "SELECT furnace_no, AVG(downtime_hours) FROM kpi_downtime_data GROUP BY furnace_no"},
+#     
+#     {"q": "Average and total energy used by furnace", 
+#      "sql": "SELECT furnace_no, AVG(energy_used) as avg_energy, SUM(energy_used) as total_energy FROM kpi_energy_used_data GROUP BY furnace_no"},
+#     
+#     {"q": "How many downtime events for Furnace 1", 
+#      "sql": "SELECT COUNT(*) FROM kpi_downtime_data WHERE furnace_no = 1"},
+#     
+#     {"q": "Total and average yield for Furnace 2 in January", 
+#      "sql": "SELECT SUM(yield_percentage) as total_yield, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE furnace_no = 2 AND date BETWEEN '2025-01-01' AND '2025-01-31'"},
+#     
+#     # ========== VARCHAR COLUMN EXAMPLES ==========
+#     {"q": "OEE for shift 4",
+#      "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE shift_id = '4' ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Compare downtime between shifts 4, 12, and 20",
+#      "sql": "SELECT shift_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE shift_id IN ('4', '12', '20') GROUP BY shift_id ORDER BY total_downtime DESC"},
+#     
+#     {"q": "Which shift has highest yield",
+#      "sql": "SELECT shift_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data GROUP BY shift_id ORDER BY avg_yield DESC LIMIT 1"},
+#     
+#     {"q": "OEE for machine FURNACE",
+#      "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'FURNACE' ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Compare downtime between FURNACE and ELECTROD machines",
+#      "sql": "SELECT machine_id, SUM(downtime_hours) as total_downtime FROM kpi_downtime_data WHERE machine_id IN ('FURNACE', 'ELECTROD') GROUP BY machine_id ORDER BY total_downtime DESC"},
+#     
+#     {"q": "OEE for product M004",
+#      "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE product_type_id = 'M004' ORDER BY date DESC LIMIT 100"},
+#     
+#     {"q": "Compare yield between MET30 and MET32",
+#      "sql": "SELECT product_type_id, AVG(yield_percentage) as avg_yield FROM kpi_yield_data WHERE product_type_id IN ('MET30', 'MET32') GROUP BY product_type_id ORDER BY avg_yield DESC"},
+#     
+#     # ========== GENERIC KPI QUERY PATTERNS ==========
+#     {"q": "Average OEE per day",
+#      "sql": "SELECT date, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data GROUP BY date ORDER BY date DESC"},
+#     
+#     {"q": "Show OEE records above 90",
+#      "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE oee_percentage > 90 ORDER BY oee_percentage DESC LIMIT 100"},
+#     
+#     {"q": "Highest OEE recorded",
+#      "sql": "SELECT date, shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data ORDER BY oee_percentage DESC LIMIT 1"},
+#     
+#     {"q": "Min, max, and average OEE",
+#      "sql": "SELECT MIN(oee_percentage) as min_oee, MAX(oee_percentage) as max_oee, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data"},
+#     
+#     {"q": "OEE on 2024-01-07",
+#      "sql": "SELECT shift_id, furnace_no, machine_id, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE date = '2024-01-07' ORDER BY oee_percentage DESC"},
+#     
+#     # ========== ERROR EXAMPLES ==========
+#     {"q": "production",
+#      "sql": "ERROR: Ambiguous query. Please specify metric (e.g., quantity produced, production efficiency, tap production)."},
+#     
+#     {"q": "OEE and downtime comparison",
+#      "sql": "ERROR: Multi-metric queries not yet supported. Please ask one metric at a time."},
+#     
+#     {"q": "What happened yesterday", 
+#      "sql": "ERROR: Cannot map question to a specific table. Please specify what data you need (e.g., OEE, downtime, production)."},
+# ]
 
 
 def find_best_table(question: str) -> Optional[str]:
@@ -832,6 +895,7 @@ def build_prompt_with_schema(schema_dict: Dict, question: str) -> str:
     """
     
     # Find best matching table
+
     best_table = find_best_table(question)
     table_hint = ""
     

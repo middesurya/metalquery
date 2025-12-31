@@ -189,8 +189,70 @@ class BRDLoader:
                             with open(image_path, "wb") as f:
                                 f.write(image_bytes)
                             
-                            # Use surrounding text as context (first 500 chars)
-                            context_text = page_text[:500].strip() if page_text else f"Image from {pdf_path.name}"
+                            # ============================================
+                            # IMPROVED CONTEXT EXTRACTION for better relevance
+                            # ============================================
+                            
+                            # Try to get text blocks with position info
+                            try:
+                                # Get text blocks with their positions
+                                text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+                                blocks = text_dict.get("blocks", [])
+                                
+                                # Get image bounding box for position matching
+                                img_rect = page.get_image_rects(xref)
+                                if img_rect:
+                                    img_bbox = img_rect[0]
+                                    img_center_y = (img_bbox.y0 + img_bbox.y1) / 2
+                                    
+                                    # Collect text blocks and sort by proximity to image
+                                    text_blocks_with_distance = []
+                                    for block in blocks:
+                                        if block.get("type") == 0:  # text block
+                                            block_y = (block.get("bbox", [0, 0, 0, 0])[1] + block.get("bbox", [0, 0, 0, 0])[3]) / 2
+                                            distance = abs(block_y - img_center_y)
+                                            
+                                            # Extract text from lines in block
+                                            block_text = ""
+                                            for line in block.get("lines", []):
+                                                for span in line.get("spans", []):
+                                                    block_text += span.get("text", "") + " "
+                                            
+                                            if block_text.strip():
+                                                text_blocks_with_distance.append((distance, block_text.strip()))
+                                    
+                                    # Sort by distance and take closest blocks
+                                    text_blocks_with_distance.sort(key=lambda x: x[0])
+                                    
+                                    # Look for figure captions (text containing "Figure", "Fig.", "Image", "Chart", "Diagram")
+                                    caption_keywords = ["figure", "fig.", "fig:", "image", "chart", "diagram", "table", "screenshot", "screen shot"]
+                                    caption_text = ""
+                                    surrounding_text = ""
+                                    
+                                    for dist, text in text_blocks_with_distance[:5]:  # Check closest 5 blocks
+                                        text_lower = text.lower()
+                                        # Check for caption
+                                        if any(kw in text_lower for kw in caption_keywords):
+                                            caption_text = text[:300]
+                                            break
+                                        elif not surrounding_text:
+                                            surrounding_text = text[:400]
+                                    
+                                    # Build context with priority: caption > surrounding text > page intro
+                                    if caption_text:
+                                        context_text = f"[Source: {pdf_path.stem}, Page {page_num+1}] {caption_text}"
+                                    elif surrounding_text:
+                                        context_text = f"[Source: {pdf_path.stem}, Page {page_num+1}] {surrounding_text}"
+                                    else:
+                                        # Fallback to page beginning but with better context
+                                        context_text = f"[Source: {pdf_path.stem}, Page {page_num+1}] {page_text[:400].strip()}"
+                                else:
+                                    # No image rect found, use enhanced fallback
+                                    context_text = f"[Source: {pdf_path.stem}, Page {page_num+1}] {page_text[:400].strip()}"
+                            except Exception as ctx_err:
+                                # Fallback in case the enhanced extraction fails
+                                logger.debug(f"Enhanced context extraction failed: {ctx_err}")
+                                context_text = f"[Source: {pdf_path.stem}, Page {page_num+1}] {page_text[:400].strip()}" if page_text else f"Image from {pdf_path.name} page {page_num+1}"
                             
                             images.append(BRDImage(
                                 filename=image_filename,
@@ -410,8 +472,16 @@ class BRDLoader:
             logger.error(f"Search failed: {e}")
             return []
     
-    def search_images(self, query: str, top_k: int = 3) -> List[Dict]:
-        """Search for relevant images based on context."""
+    def search_images(self, query: str, top_k: int = 3, min_relevance: float = 0.5) -> List[Dict]:
+        """
+        Search for relevant images based on context.
+        
+        Args:
+            query: Search query
+            top_k: Maximum number of images to return
+            min_relevance: Minimum relevance score (0-1). Higher = more strict. 
+                          ChromaDB returns distance, so we convert: relevance = 1 - (distance / 2)
+        """
         if not self._initialized or not self.image_collection:
             logger.warning("Image collection not initialized")
             return []
@@ -420,19 +490,38 @@ class BRDLoader:
             model = self._get_embedding_model()
             query_embedding = model.encode([query]).tolist()
             
+            # Fetch more results so we can filter
             results = self.image_collection.query(
                 query_embeddings=query_embedding,
-                n_results=top_k
+                n_results=min(top_k * 3, 20)  # Fetch extra for filtering
             )
             
             image_results = []
+            seen_sources = set()  # Avoid duplicate images from same source+page
+            
             for i, context in enumerate(results['documents'][0]):
                 metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                distance = results['distances'][0][i] if results['distances'] else 2.0
+                
+                # Convert distance to relevance score (0-1)
+                # ChromaDB uses L2 distance, typical range is 0-2 for normalized embeddings
+                relevance = max(0, 1 - (distance / 2))
+                
+                # Skip low-relevance results
+                if relevance < min_relevance:
+                    logger.debug(f"Skipping image with low relevance: {relevance:.3f}")
+                    continue
                 
                 # Get image filename from metadata
                 source = metadata.get('source', 'unknown')
                 page = metadata.get('page', 0)
                 img_idx = metadata.get('image_idx', 0)
+                
+                # Dedupe: skip if we already have an image from same source+page
+                source_key = f"{source}_p{page}"
+                if source_key in seen_sources:
+                    continue
+                seen_sources.add(source_key)
                 
                 # Find the matching image
                 for img in self.images:
@@ -445,10 +534,16 @@ class BRDLoader:
                             'context': context[:200],  # Truncated context
                             'source': source,
                             'page': page,
-                            'distance': results['distances'][0][i] if results['distances'] else 0
+                            'distance': distance,
+                            'relevance': round(relevance, 3)  # Include relevance score
                         })
                         break
+                
+                # Stop if we have enough relevant results
+                if len(image_results) >= top_k:
+                    break
             
+            logger.info(f"Image search: found {len(image_results)} relevant images for query: {query[:50]}...")
             return image_results
             
         except Exception as e:

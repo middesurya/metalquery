@@ -196,12 +196,16 @@ class EnhancedQueryGuard:
         # ACTION WORDS (required for valid queries)
         # ═══════════════════════════════════════════════════════════
         self.action_words = [
+            # Question words
             "what", "which", "how", "when", "where", "why", "who",
+            # Data retrieval
             "show", "get", "list", "display", "find", "fetch",
             "calculate", "compute", "average", "sum", "count",
-            "compare", "analyze", "check", "provide", "tell",
+            "compare", "analyze", "check", "provide",
             "top", "bottom", "highest", "lowest", "best", "worst",
             "give", "retrieve", "filter", "between", "from", "for", "by",
+            # BRD/Documentation action words
+            "explain", "describe", "tell", "about", "define", "meaning",
         ]
         
         # ═══════════════════════════════════════════════════════════
@@ -362,14 +366,26 @@ class EnhancedQueryGuard:
         
         # Check for action word
         has_action = any(token in self.action_words for token in tokens)
-        if not has_action:
+        
+        # Skip action word check if BRD domain keywords are present
+        # (BRD queries like "explain about plant config" are valid without action words)
+        brd_keywords = [
+            "raw material", "additives", "plant config", "furnace config", 
+            "system config", "configuration", "process", "procedure", "workflow",
+            "grading plan", "lab analysis", "log book", "logbook", "tap hole",
+            "ehs", "incident", "sop", "brd", "setup", "setting",
+            "master data", "access control", "roles", "users",
+        ]
+        has_brd_keyword = any(kw in query_lower for kw in brd_keywords)
+        
+        if not has_action and not has_brd_keyword:
             logger.info(f"📢 NO ACTION WORD: {query}")
             return True, GuardResult(
                 is_relevant=False,
                 relevance_type=QueryRelevance.IRRELEVANT,
-                reason="No action word detected (show, get, what, how, etc.)",
+                reason="No action word detected (show, get, what, how, explain, etc.)",
                 confidence=0.65,
-                suggested_message="🤔 Please start with an action word: **Show**, **What**, **Get**, **How**, **Compare**."
+                suggested_message="🤔 Please start with an action word: **Show**, **What**, **Get**, **How**, **Explain**."
             )
         
         # Suspicious tech/programming words that don't belong in manufacturing queries
@@ -517,6 +533,101 @@ class EnhancedQueryGuard:
     def _check_domain_relevance(self, query: str) -> Tuple[bool, Optional[GuardResult]]:
         """Check if query contains sufficient domain keywords."""
         
+        query_lower = query.lower()
+        
+        # ══════════════════════════════════════════════════════════════════════
+        # COMPREHENSIVE BRD MULTI-WORD PHRASES
+        # Extracted from actual 33 BRD PDF documents in /brd folder
+        # ══════════════════════════════════════════════════════════════════════
+        brd_multiword_phrases = [
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S03 - System Configuration
+            # ═══════════════════════════════════════════════════════════════════
+            "plant config", "plant configuration",
+            "furnace config", "furnace configuration",
+            "system config", "system configuration",
+            "user access", "user access control",
+            "access control", "roles", "users",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S04 - Master Data & Material Maintenance
+            # ═══════════════════════════════════════════════════════════════════
+            "master data", "material maintenance",
+            "raw material", "raw materials", "furnace raw material", "furnace raw materials",
+            "additives", "additive",
+            "byproduct", "byproducts", "by-product", "by-products", "by product", "by products",
+            "wip", "work in progress",
+            "grading plan", "grading",
+            "products", "product",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S05 - Core Process
+            # ═══════════════════════════════════════════════════════════════════
+            "core process", "core process production",
+            "production process", "process flow",
+            "tapping", "tap", "cast", "electrode",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S06 - Reports
+            # ═══════════════════════════════════════════════════════════════════
+            "raw material consumption", "raw material consumption report",
+            "raw material analysis", "raw material analysis report",
+            "raw material size analysis", "size analysis",
+            "spout analysis", "spout analysis report",
+            "tap analysis", "tap analysis report",
+            "production report", "production",
+            "downtime analysis", "downtime analysis report", "downtime report",
+            "quality summary", "quality summary report", "quality report",
+            "report format", "report structure", "report fields", "reports",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S08 - Lab Analysis
+            # ═══════════════════════════════════════════════════════════════════
+            "lab analysis", "laboratory analysis", "laboratory",
+            "lab raw material", "lab raw material analysis",
+            "lab spout analysis", "lab spout",
+            "lab tap analysis", "lab tap",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S09 - Log Book
+            # ═══════════════════════════════════════════════════════════════════
+            "log book", "logbook", "log",
+            "tap hole", "tap hole log",
+            "furnace bed", "furnace bed log", "bed log",
+            "furnace downtime", "furnace downtime log", "downtime log",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # BRD S013 - EHS (Environment Health Safety)
+            # ═══════════════════════════════════════════════════════════════════
+            "ehs", "incident", "incident reporting", "incident report",
+            "safety", "safety reporting", "safety report",
+            "environment", "environment health", "environment health safety",
+            "health safety",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # General BRD/SOP/Documentation Terms
+            # ═══════════════════════════════════════════════════════════════════
+            "brd", "sop", "procedure", "workflow", "guideline", "guidelines",
+            "policy", "process", "requirement", "specification",
+            "configure", "configuration", "setup", "setting", "settings",
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # Question Patterns that indicate BRD queries
+            # ═══════════════════════════════════════════════════════════════════
+            "how to", "how do", "how does", "how can", "how should",
+            "tell me about", "explain about", "explain the",
+            "describe", "describe the", "definition", "define",
+            "what is the process", "what are the steps",
+            "what does", "meaning of",
+        ]
+        
+        # Check if any multi-word phrase is in the query
+        for phrase in brd_multiword_phrases:
+            if phrase in query_lower:
+                logger.info(f"✓ Multi-word BRD phrase matched: '{phrase}'")
+                return False, None
+        
+        # Fall back to token-based fuzzy matching
         matched = self._fuzzy_keyword_match(query)
         
         if len(matched) == 0:
