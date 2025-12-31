@@ -140,13 +140,17 @@
 
 | Layer | Protection |
 |-------|------------|
-| **Rate Limiting** | 30 req/min per IP |
+| **Rate Limiting** | 30 req/min per IP, token-aware limits |
 | **Query Guard** | Off-topic/harmful query blocking |
 | **SQL Guardrails** | SELECT only, table whitelist |
+| **Guardrails AI** | LLM output validation |
+| **Anomaly Detection** | Unusual query pattern detection |
+| **RBAC** | Role-based access control |
+| **Audit Logging** | Full compliance tracking |
+| **Flipping Detection** | Prompt injection protection |
 | **Django Validator** | Defense in depth |
 | **Query Timeout** | 30 second limit |
 | **Row Limit** | Max 100 rows |
-| **Audit Logging** | Compliance tracking |
 
 ## 📁 Project Structure
 
@@ -161,10 +165,18 @@ poc_nlp_tosql/
 │   ├── brd/              # 33 PDF documents for RAG
 │   ├── brd_images/       # 389 extracted images
 │   ├── chroma_db/        # Vector database
+│   ├── security/         # Security modules
+│   │   ├── anomaly_detector.py   # Anomaly detection
+│   │   ├── audit_logger.py       # Audit logging
+│   │   ├── flipping_detector.py  # Flip detection
+│   │   ├── rbac.py               # Role-based access control
+│   │   ├── red_team_simulator.py # Security testing
+│   │   └── sql_validator.py      # SQL validation
 │   ├── brd_loader.py     # PDF extraction + ChromaDB
 │   ├── brd_rag.py        # RAG query handler
 │   ├── query_router.py   # SQL vs BRD routing
-│   └── guardrails.py     # SQL validation
+│   ├── query_guard.py    # Query validation
+│   └── guardrails.py     # SQL guardrails
 │
 ├── frontend/             # React SPA
 │   └── src/
@@ -263,10 +275,12 @@ MIT License - See LICENSE file for details.
 
 ---
 
-Last Updated: 2025-12-30
+Last Updated: 2025-12-31
+- Added security modules (anomaly_detector, audit_logger, flipping_detector, rbac, red_team_simulator, sql_validator)
+- Added guardrails-ai for LLM validation
+- Updated prompts and query guard
+- Added SECURITY.md documentation
 - Multimodal RAG with 389 images
 - Image lightbox viewer
-- BRD RAG search fix
 - Dynamic schema keywords (289 keywords auto-loaded from 29 tables)
-- Fixed date query blocking (e.g., 2024-01-07 no longer blocked as math)
-- NLP service moved to port 8004
+- NLP service on port 8004
