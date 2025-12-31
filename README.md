@@ -7,9 +7,9 @@
 ## 🏗️ Architecture
 
 ```
-                         SECURITY BOUNDARY
-                         AI never touches DB
-                                ↓
+                             SECURITY BOUNDARY
+                             AI never touches DB
+                                    ↓
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌──────────────┐
 │ React Frontend  │────▶│  Django Backend │────▶│ NLP Microservice│────▶│ Groq LLM API │
 │   (Port 5173)   │     │   (Port 8000)   │     │   (Port 8004)   │     │(llama-3.3-70b)│
@@ -23,12 +23,14 @@
                                                 └─────────────────┘
 ```
 
-### Key Security Principles:
+### Key Security Principles (IEC 62443 SL-2/SL-3)
 - **AI Never Touches Database** - NLP service ONLY generates SQL
 - **Django Owns the Database** - All queries go through Django ORM
 - **Defense in Depth** - SQL validated at both NLP and Django layers
 - **Rate Limiting** - 30 requests/minute per IP
 - **Query Guard** - Off-topic/harmful query detection
+
+---
 
 ## ✨ Features
 
@@ -172,6 +174,8 @@ poc_nlp_tosql/
 └── README.md             # This file
 ```
 
+---
+
 ## 🛠️ API Endpoints
 
 ### Django Backend (Port 8000)
@@ -205,6 +209,53 @@ poc_nlp_tosql/
 - [NLP_SERVICE_DOCS.md](./NLP_SERVICE_DOCS.md) - NLP service documentation
 - [QUERY_ROUTING.md](./QUERY_ROUTING.md) - Query routing logic
 - [CHANGES.md](./CHANGES.md) - Changelog
+
+---
+
+## 🧪 Testing
+
+### Run Accuracy Tests
+```bash
+cd nlp_service
+python accuracy_tester.py
+```
+
+### Test API Endpoints
+```bash
+# Health check
+curl http://localhost:8000/api/chatbot/health/
+
+# SQL query
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Show OEE for last week"}'
+
+# BRD query
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is EHS?"}'
+```
+
+### Security Test Suite
+```python
+from security import SecurityTestRunner
+
+runner = SecurityTestRunner()
+results = runner.run_full_test()
+print(f"Block Rate: {results['block_rate']*100:.1f}%")
+```
+
+---
+
+## 📚 Documentation
+
+- [Architecture Guide](ARCHITECTURE.md) - System design & request flow
+- [Security Documentation](SECURITY.md) - 4-layer security implementation
+- [Change Log](CHANGES.md) - All modifications made
+- [Query Routing](QUERY_ROUTING.md) - SQL vs BRD routing logic
+- [Rate Limiting](RATE_LIMITING.md) - Token-aware rate limiting
+
+---
 
 ## 📄 License
 

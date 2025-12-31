@@ -86,81 +86,113 @@ class QueryRouter:
         "furnace health", "performance", "throughput",
     }
     
-    # Keywords that suggest BRD/documentation queries (from 33 BRD documents)
+    # ════════════════════════════════════════════════════════════════════════
+    # BRD KEYWORDS - From 33 BRD Documents
+    # These suggest documentation/process queries rather than data queries
+    # ════════════════════════════════════════════════════════════════════════
     BRD_KEYWORDS = {
-        # Process/Definition questions
-        "how to", "how do", "what is the process", "what are the steps",
+        # Question patterns that indicate BRD queries
+        "how to", "how do", "how does", "how can", "how should",
+        "what is the process", "what are the steps",
         "procedure", "workflow", "guidelines", "policy", "rule",
         "define", "definition", "meaning", "explain", "describe",
-        "what does", "tell me about", "how does",
+        "what does", "tell me about", "explain about",
         
-        # BRD S013 - EHS (Incident Reporting)
-        "ehs", "incident", "incident reporting", "safety reporting",
-        "environment health safety", "environment health",
-        
-        # BRD S03 - System Config
+        # BRD S03 - System Configuration
         "system config", "plant config", "furnace config",
-        "user access control", "access control", "roles", "users",
-        "configure", "configuration", "setup", "setting",
+        "plant configuration", "furnace configuration", "system configuration",
+        "user access control", "user access", "access control",
+        "roles", "users", "configure", "configuration", "setup", "setting",
         
-        # BRD S04 - Master Data
+        # BRD S04 - Master Data & Material Maintenance
         "master data", "material maintenance",
-        "furnace raw materials", "raw materials",
-        "additives", "byproducts", "by-products", "by products",
+        "furnace raw materials", "furnace raw material", "raw materials", "raw material",
+        "additives", "additive",
+        "byproducts", "by-products", "by products", "byproduct",
         "wip", "work in progress",
-        "grading plan", "products",
+        "grading plan", "grading", "products", "product",
         
         # BRD S05 - Core Process
-        "core process", "core process production",
+        "core process", "core process production", "production process", "process flow",
+        "tapping", "cast", "electrode",
         
         # BRD S06 - Reports (structure, not data)
-        "report format", "report structure", "report fields",
-        "raw material consumption report", "consumption report",
-        "raw material analysis report", "size analysis report",
-        "spout analysis report", "tap analysis report",
-        "production report structure", "downtime analysis report",
-        "quality summary report",
+        "report format", "report structure", "report fields", "reports",
+        "raw material consumption report", "raw material consumption",
+        "raw material analysis report", "raw material analysis",
+        "raw material size analysis", "size analysis report", "size analysis",
+        "spout analysis report", "spout analysis",
+        "tap analysis report", "tap analysis",
+        "production report", "production report structure",
+        "downtime analysis report", "downtime analysis", "downtime report",
+        "quality summary report", "quality summary", "quality report",
         
         # BRD S08 - Lab Analysis
-        "lab analysis", "laboratory analysis",
-        "raw material analysis", "spout analysis", "tap analysis",
+        "lab analysis", "laboratory analysis", "laboratory",
+        "lab raw material", "lab raw material analysis",
+        "lab spout analysis", "lab spout",
+        "lab tap analysis", "lab tap",
         
         # BRD S09 - Log Book
-        "log book", "logbook", "tap hole log", "tap hole",
-        "furnace downtime log", "furnace bed log", "bed log",
+        "log book", "logbook", "log",
+        "tap hole log", "tap hole",
+        "furnace downtime log", "furnace downtime", "downtime log",
+        "furnace bed log", "furnace bed", "bed log",
+        
+        # BRD S013 - EHS
+        "ehs", "incident", "incident reporting", "incident report",
+        "safety reporting", "safety report", "safety",
+        "environment health safety", "environment health", "health safety",
         
         # General BRD terms
         "brd", "sop", "document", "requirement", "specification",
         "who can", "permission", "role",
     }
     
-    # Concepts that are ALWAYS BRD (override SQL) - "what is X" questions
+    # ════════════════════════════════════════════════════════════════════════
+    # BRD CONCEPTS - ALWAYS route to BRD (highest priority)
+    # When "what is <concept>", route to BRD not SQL
+    # ════════════════════════════════════════════════════════════════════════
     BRD_CONCEPTS = {
-        # General BRD terms
-        "ehs", "sop", "brd", "policy", "procedure", "guideline", "workflow",
-        "configuration", "requirement", "process",
+        # General BRD/Documentation terms
+        "ehs", "sop", "brd", "policy", "procedure", "guideline", "guidelines",
+        "workflow", "configuration", "requirement", "process",
         
-        # Master Data concepts
-        "raw material", "raw materials", "additives", "byproducts", "by-products",
-        "wip", "work in progress", "grading plan", "material maintenance",
+        # BRD S03 - System Configuration
+        "plant config", "plant configuration",
+        "furnace config", "furnace configuration", 
+        "system config", "system configuration",
+        "user access", "access control", "roles", "users",
         
-        # Lab Analysis concepts  
-        "lab analysis", "laboratory", "spout analysis", "tap analysis",
-        "raw material analysis", "size analysis",
+        # BRD S04 - Master Data & Material Maintenance
+        "raw material", "raw materials", "furnace raw material", "furnace raw materials",
+        "additives", "additive",
+        "byproducts", "by-products", "byproduct",
+        "wip", "work in progress",
+        "grading plan", "material maintenance", "master data",
         
-        # Log Book concepts
-        "log book", "logbook", "tap hole log", "furnace bed", "downtime log",
-        "furnace downtime",
+        # BRD S05 - Core Process
+        "core process", "production process", "process flow",
         
-        # Report concepts
-        "consumption report", "production report", "quality summary",
-        "downtime analysis",
+        # BRD S06 - Reports (structure concepts)
+        "consumption report", "production report", "quality summary", "quality report",
+        "downtime analysis", "downtime report", "size analysis",
+        "raw material consumption", "raw material analysis",
         
-        # System Config concepts
-        "plant config", "furnace config", "user access", "access control", "roles",
+        # BRD S08 - Lab Analysis
+        "lab analysis", "laboratory", "laboratory analysis",
+        "spout analysis", "tap analysis",
         
-        # EHS concepts
-        "incident reporting", "safety", "environment health",
+        # BRD S09 - Log Book
+        "log book", "logbook",
+        "tap hole log", "tap hole",
+        "furnace bed", "bed log", "furnace bed log",
+        "furnace downtime", "downtime log", "furnace downtime log",
+        
+        # BRD S013 - EHS
+        "incident reporting", "incident report",
+        "safety", "safety reporting",
+        "environment health", "environment health safety",
     }
     
     @classmethod
