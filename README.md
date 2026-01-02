@@ -2,9 +2,10 @@
 
 🏭 **MetalQuery** is a production-ready AI-powered chatbot for manufacturing KPI analysis and BRD (Business Requirement Document) question-answering. It converts natural language queries into SQL and retrieves information from 33 PDF documents with **multimodal support (text + images)**.
 
-![Groq](https://img.shields.io/badge/LLM-Groq_llama--3.3--70b-orange) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/NLP-FastAPI-009688) ![Django](https://img.shields.io/badge/Backend-Django-092E20) ![ChromaDB](https://img.shields.io/badge/Vector-ChromaDB-green)
+![IGNIS  Demo](https://img.shields.io/badge/AI-Groq_LLM-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue) ![React](https://img.shields.io/badge/Frontend-React-61DAFB) ![FastAPI](https://img.shields.io/badge/NLP-FastAPI-009688) ![Django](https://img.shields.io/badge/Backend-Django-092E20) ![Security](https://img.shields.io/badge/Security-IEC_62443-green)
+---
 
-## 🏗️ Architecture
+## 🏗️ Production Architecture
 
 ```
                              SECURITY BOUNDARY

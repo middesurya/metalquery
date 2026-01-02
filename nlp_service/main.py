@@ -37,6 +37,13 @@ from guardrails_layer import CombinedGuard, GuardrailsLayer
 # ✅ RATE LIMITING
 from rate_limiter import get_rate_limiter, check_rate_limit, record_usage, RateLimitConfig
 
+# ✅ SECURITY MODULE - 4-Layer Defense (IEC 62443 SL-2/SL-3)
+from security import (
+    FlippingDetector, PromptSignatureValidator,
+    SQLInjectionValidator, AnomalyDetector, RedTeamDetector,
+    audit_logger
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -66,6 +73,13 @@ brd_initialized = False
 guard = QueryGuard(confidence_threshold=0.35)  # ✅ Custom Query Guard
 combined_guard = None  # ✅ Combined Guard (initialized on startup)
 guardrails_layer = None  # ✅ Guardrails AI layer
+
+# ✅ Security Module Instances (4-Layer Defense)
+flipping_detector = None
+prompt_validator = None
+sql_injection_validator = None
+anomaly_detector = None
+red_team_detector = None
 
 # ============================================================
 # Models
@@ -161,6 +175,18 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠ Combined Guard failed, using custom guard only: {e}")
         combined_guard = None
+    
+    # ✅ Initialize Security Module (4-Layer Defense)
+    global flipping_detector, prompt_validator, sql_injection_validator, anomaly_detector, red_team_detector
+    try:
+        flipping_detector = FlippingDetector()
+        prompt_validator = PromptSignatureValidator()
+        sql_injection_validator = SQLInjectionValidator()
+        anomaly_detector = AnomalyDetector()
+        red_team_detector = RedTeamDetector()
+        logger.info("✓ Security module initialized (4-layer defense: Flipping, Injection, Anomaly, Audit)")
+    except Exception as e:
+        logger.warning(f"⚠ Security module initialization failed: {e}")
     
     logger.info("✓ Query Guard initialized")
 
@@ -524,6 +550,59 @@ async def hybrid_chat(request: HybridChatRequest):
     
     try:
         # ═══════════════════════════════════════════════════════════
+        # ✅ SECURITY LAYER 1A: Flipping Attack Detection
+        # ═══════════════════════════════════════════════════════════
+        if flipping_detector:
+            flip_result = flipping_detector.detect_flipping(request.question)
+            if flip_result['is_flipped']:
+                logger.warning(f"🚨 FLIPPING ATTACK blocked: {flip_result['detected_modes']}")
+                audit_logger.log_flipping_detected(
+                    user_id="anonymous", prompt=request.question,
+                    detected_modes=flip_result['detected_modes'],
+                    confidence=flip_result['confidence'], ip_address="127.0.0.1"
+                )
+                return HybridChatResponse(
+                    success=True, query_type="blocked",
+                    response="🔒 Unusual query pattern detected. Please rephrase your question in plain English.",
+                    sql=None, results=None, sources=None, error=None, routing_confidence=0.0
+                )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ✅ SECURITY LAYER 1B: Prompt Signature Validation
+        # ═══════════════════════════════════════════════════════════
+        if prompt_validator:
+            sig_result = prompt_validator.validate(request.question)
+            if not sig_result['is_safe']:
+                logger.warning(f"🚨 INJECTION ATTACK blocked: {sig_result['threat_types']}")
+                audit_logger.log_blocked_injection(
+                    user_id="anonymous", prompt=request.question,
+                    attack_type=sig_result['threat_types'][0] if sig_result['threat_types'] else "unknown",
+                    confidence=sig_result['threat_score'], ip_address="127.0.0.1"
+                )
+                return HybridChatResponse(
+                    success=True, query_type="blocked",
+                    response="🔒 Your query contains patterns that cannot be processed. Please rephrase your question.",
+                    sql=None, results=None, sources=None, error=None, routing_confidence=0.0
+                )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ✅ SECURITY LAYER 1C: Red Team Attack Detection
+        # ═══════════════════════════════════════════════════════════
+        if red_team_detector:
+            rt_result = red_team_detector.detect(request.question)
+            if rt_result['is_attack']:
+                logger.warning(f"🚨 RED TEAM ATTACK blocked: {rt_result['categories']}")
+                audit_logger.log_red_team_blocked(
+                    user_id="anonymous", categories=rt_result['categories'],
+                    score=rt_result['score'], ip_address="127.0.0.1"
+                )
+                return HybridChatResponse(
+                    success=True, query_type="blocked",
+                    response="🔒 I can only help with manufacturing data queries. Please ask about production metrics, equipment status, or process data.",
+                    sql=None, results=None, sources=None, error=None, routing_confidence=0.0
+                )
+        
+        # ═══════════════════════════════════════════════════════════
         # ✅ STEP 0: GUARDRAILS AI CHECK (PII, profanity, sensitive data)
         # ═══════════════════════════════════════════════════════════
         if guardrails_layer:
@@ -597,6 +676,27 @@ async def hybrid_chat(request: HybridChatRequest):
             # Use existing SQL generation logic
             sql_request = GenerateSQLRequest(question=request.question)
             sql_response = await generate_sql(sql_request)
+            
+            # ═══════════════════════════════════════════════════════════
+            # ✅ SECURITY LAYER 3: Anomaly Detection (flag, don't block)
+            # ═══════════════════════════════════════════════════════════
+            if anomaly_detector and sql_response.success and sql_response.sql:
+                is_anomalous, reason, score = anomaly_detector.is_anomalous(
+                    user_id="anonymous",
+                    query_context={'sql': sql_response.sql, 'tables': sql_response.tables_used or []}
+                )
+                if is_anomalous:
+                    logger.warning(f"⚠️ ANOMALY flagged: {reason} (score: {score:.2f})")
+                    audit_logger.log_anomaly_detected(
+                        user_id="anonymous", reason=reason, score=score, ip_address="127.0.0.1"
+                    )
+            
+            # ✅ AUDIT LOG: Successful query
+            if sql_response.success:
+                audit_logger.log_query(
+                    user_id="anonymous", sql=sql_response.sql or "",
+                    result_count=0, execution_time=0, ip_address="127.0.0.1"
+                )
             
             return HybridChatResponse(
                 success=sql_response.success,
