@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
-import ModeToggle from './components/ModeToggle';
 import config from './config';
 
 // Django Backend API URL (React → Django → NLP → LLM)
@@ -196,7 +195,7 @@ const ImageGallery = ({ images }) => {
     if (!images || images.length === 0) return null;
 
     // NLP service URL for images
-    const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8004';
+    const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
 
     return (
         <div className="image-gallery">
@@ -357,7 +356,7 @@ function App() {
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [queryMode, setQueryMode] = useState('auto');
+
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [lightboxData, setLightboxData] = useState(null);
     const messagesEndRef = useRef(null);
@@ -577,11 +576,6 @@ function App() {
                         <p>Ask questions about furnace KPIs, production data, or BRD documentation</p>
                     </div>
                     <div className="header-right">
-                        <ModeToggle
-                            mode={queryMode}
-                            onModeChange={setQueryMode}
-                            disabled={isLoading}
-                        />
                         <span className="badge">Groq LLM</span>
                     </div>
                 </header>

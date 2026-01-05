@@ -458,7 +458,21 @@ Return ONLY the SQL query. No explanation.
 
         logger.info(f"📊 Final Scores -> Confidence: {confidence_score}, Relevance: {relevance_score}")
 
-        # Final decision logic
+        # ════════════════════════════════════════════════════════════
+        # STEP 7: Handle Very Low Relevance - Data doesn't exist
+        # ════════════════════════════════════════════════════════════
+        if relevance_score < 30:
+            logger.warning(f"⚠ Very low relevance ({relevance_score}%). Data likely doesn't exist in schema.")
+            return GenerateSQLResponse(
+                success=False,
+                sql=None,
+                tables_used=None,
+                error=f"I couldn't find data for '{request.question}'. This information may not exist in the database. Try asking about: OEE, downtime, production, yield, cycle time, energy, defect rate, or other KPIs.",
+                confidence_score=confidence_score,
+                relevance_score=relevance_score
+            )
+
+        # Final decision logic for medium relevance
         if relevance_score < 50:
              logger.warning(f"⚠ Final Relevance too low ({relevance_score}). Flagging.")
              if not validation_warnings:

@@ -90,8 +90,26 @@ class SQLGuardrails:
     def _extract_tables(self, sql: str) -> Set[str]:
         """
         Extract table names from FROM and JOIN clauses.
+        Excludes EXTRACT(... FROM ...) function syntax.
         """
         tables = set()
+        
+        # First, remove EXTRACT(... FROM ...) to avoid false positives
+        # EXTRACT(MONTH FROM date) should NOT extract 'date' as a table
+        sql_cleaned = re.sub(
+            r"\bEXTRACT\s*\([^)]*\bFROM\b[^)]*\)",
+            "",
+            sql,
+            flags=re.IGNORECASE
+        )
+        
+        # Also remove DATE_TRUNC and similar functions that use FROM
+        sql_cleaned = re.sub(
+            r"\bDATE_TRUNC\s*\([^)]*\)",
+            "",
+            sql_cleaned,
+            flags=re.IGNORECASE
+        )
 
         patterns = [
             r"\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)",
@@ -99,7 +117,7 @@ class SQLGuardrails:
         ]
 
         for pattern in patterns:
-            matches = re.findall(pattern, sql, re.IGNORECASE)
+            matches = re.findall(pattern, sql_cleaned, re.IGNORECASE)
             tables.update(m.lower() for m in matches)
 
         return tables

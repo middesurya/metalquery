@@ -9,7 +9,6 @@ const ModeToggle = ({ mode, onModeChange, disabled = false }) => {
     const modes = [
         { id: 'auto', label: 'Auto', icon: '🔄', description: 'Auto-detect query type' },
         { id: 'nlp-sql', label: 'Data', icon: '📊', description: 'Query database for metrics' },
-        { id: 'rag', label: 'Docs', icon: '📚', description: 'Search BRD documents' },
     ];
 
     return (

@@ -123,14 +123,23 @@ class FlippingDetector:
     
     def _estimate_perplexity_anomaly(self, text: str) -> float:
         """
-        Rough perplexity estimate based on character patterns.
+        Refined perplexity estimate to reduce false positives.
+        Only flags truly unusual patterns, not normal English sentences.
         """
-        unusual_patterns = len(re.findall(r'[a-z]{5,}', text))
-        total_patterns = len(re.findall(r'\b\w+\b', text))
-        
-        if total_patterns == 0:
+        words = text.split()
+        if len(words) < 3:
             return 0.0
-        return (unusual_patterns / total_patterns) * 100
+        
+        # Check for actual reversed harmful words only
+        reversal_score = 0
+        for word in words:
+            clean_word = re.sub(r'[^\w]', '', word).lower()
+            if len(clean_word) > 2:
+                reversed_word = clean_word[::-1]
+                if reversed_word in self.harmful_keywords:
+                    reversal_score += 50
+        
+        return reversal_score
 
 
 class PromptSignatureValidator:

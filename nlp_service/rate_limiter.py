@@ -15,14 +15,14 @@ from typing import Tuple
 from collections import deque
 
 logger = logging.getLogger(__name__)
-
+from config import settings
 
 @dataclass
 class RateLimitConfig:
-    """Rate limit configuration."""
-    requests_per_minute: int = 25  # Buffer below 30
-    tokens_per_minute: int = 5000  # Buffer below 6000
-    max_output_tokens: int = 256   # Reduced from 512
+    """Rate limit configuration - reads from .env via settings."""
+    requests_per_minute: int = settings.max_requests_per_minute
+    tokens_per_minute: int = settings.max_tokens_per_minute
+    max_output_tokens: int = settings.max_output_tokens
 
 
 class GroqRateLimiter:

@@ -208,6 +208,18 @@ class QueryRouter:
         """
         question_lower = question.lower().strip()
         
+        # ═════════════════════════════════════════════════════════════════════
+        # PRIORITY CHECK 0: "explain/describe/tell me about" → ALWAYS BRD
+        # These are documentation questions, never SQL data queries
+        # ═════════════════════════════════════════════════════════════════════
+        if re.search(r'^(explain|describe|tell me about|what does|how does)', question_lower):
+            logger.info(f"Routing to BRD: explanation/documentation query detected")
+            return "brd", 0.95
+        
+        if "explain about" in question_lower or "explain the" in question_lower:
+            logger.info(f"Routing to BRD: 'explain about/the' pattern detected")
+            return "brd", 0.95
+        
         # ✅ PRIORITY CHECK 1: "what is <BRD concept>" patterns → BRD (check FIRST!)
         # BRD concepts are more specific, so check them before generic SQL metrics
         if re.search(r'what (is|are|does|was|were)', question_lower):

@@ -154,31 +154,41 @@ class BRDLoader:
                             image_size = len(image_bytes)
                             
                             # ============================================
-                            # LOGO FILTERING: Skip unwanted images
+                            # ENHANCED LOGO FILTERING: Skip unwanted images
                             # ============================================
                             
-                            # Skip very small images (< 10KB) - likely icons/logos
-                            if image_size < 10000:
+                            # Skip very small images (< 15KB) - likely icons/logos
+                            if image_size < 15000:
                                 continue
                             
-                            # Skip images with logo-like dimensions
-                            # Logos are typically small height (< 100px) and wide
-                            if height > 0 and height < 100:
+                            # Skip images with small dimensions (likely icons/logos)
+                            # Logos typically have height < 150px
+                            if height > 0 and height < 150:
                                 continue
                             
-                            # Skip very wide aspect ratio images (logos)
+                            # Skip images with small width (likely vertical logos)
+                            if width > 0 and width < 150:
+                                continue
+                            
+                            # Skip very wide aspect ratio images (logos, headers, footers)
                             if width > 0 and height > 0:
                                 aspect_ratio = width / height
-                                # Logos often have aspect ratio > 4:1 or < 1:4
-                                if aspect_ratio > 4 or aspect_ratio < 0.25:
+                                # Logos often have aspect ratio > 3:1 or < 1:3
+                                if aspect_ratio > 3 or aspect_ratio < 0.33:
+                                    continue
+                            
+                            # Skip small total pixel area (likely logos)
+                            if width > 0 and height > 0:
+                                pixel_area = width * height
+                                if pixel_area < 50000:  # Less than ~224x224
                                     continue
                             
                             # Track image sizes to detect repeated logos
                             size_key = f"{width}x{height}_{image_size}"
                             seen_sizes[size_key] = seen_sizes.get(size_key, 0) + 1
                             
-                            # Skip if this exact size appears too often (likely logo)
-                            if seen_sizes[size_key] > 10:
+                            # Skip if this exact size appears more than 5 times (likely logo)
+                            if seen_sizes[size_key] > 5:
                                 continue
                             
                             # Generate unique filename
