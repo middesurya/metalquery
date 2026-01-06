@@ -1,0 +1,21 @@
+{
+  "id": "session-1767307355229",
+  "projectId": "3cf6bad5-0595-42eb-acf5-5f453463fe39",
+  "title": "What is the architecture of this project?",
+  "messages": [
+    {
+      "id": "msg-1767307355230",
+      "role": "user",
+      "content": "What is the architecture of this project?",
+      "timestamp": "2026-01-01T22:42:35.230Z"
+    },
+    {
+      "id": "msg-1767307355635",
+      "role": "assistant",
+      "content": "Claude CLI not found. Please ensure it is installed and in your PATH.",
+      "timestamp": "2026-01-01T22:42:35.636Z"
+    }
+  ],
+  "createdAt": "2026-01-01T22:42:35.229Z",
+  "updatedAt": "2026-01-01T22:42:35.636Z"
+}
