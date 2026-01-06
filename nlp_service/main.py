@@ -803,6 +803,6 @@ if __name__ == "__main__":
         "main:app",
         host=settings.nlp_service_host,
         port=settings.nlp_service_port,
-        reload=True
+        reload=False  # Disabled for stable RAG state
     )
 
