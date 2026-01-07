@@ -210,3 +210,87 @@ def get_aggregation(column_name: str) -> str:
 def is_exposed_table(table_name: str) -> bool:
     """Check if a table is in the exposed whitelist."""
     return table_name.lower() in EXPOSED_TABLES
+
+
+# ============================================================
+# FUNCTION CODE → TABLE MAPPING (RBAC)
+# Maps users_rolepermission.function_master_id to database tables
+# ============================================================
+
+FUNCTION_TABLE_MAPPING = {
+    # Plant Configuration (PLT_CFG)
+    "PLT_CFG": [
+        "plant_plant",
+    ],
+
+    # Furnace Maintenance (FUR_MNT)
+    "FUR_MNT": [
+        "furnace_furnaceconfig",
+        "furnace_config_parameters",
+    ],
+
+    # Log Book (LOG_BOOK)
+    "LOG_BOOK": [
+        "log_book_furnace_down_time_event",
+        "log_book_reasons",
+        "log_book_downtime_type_master",
+    ],
+
+    # Core Production Process (TAP_PROC)
+    "TAP_PROC": [
+        "core_process_tap_production",
+        "core_process_tap_process",
+        "core_process_tap_grading",
+    ],
+
+    # KPI Base Access - actual tables filtered by users_role_kpis
+    "KPI_VIEW": [],  # Empty - tables come from KPI_METRIC_TABLE_MAPPING
+}
+
+
+# ============================================================
+# KPI METRIC CODE → TABLE MAPPING (RBAC)
+# Maps users_role_kpis.kpi_metric_code to specific KPI tables
+# ============================================================
+
+KPI_METRIC_TABLE_MAPPING = {
+    # Performance KPIs
+    "OEE": "kpi_overall_equipment_efficiency_data",
+    "YIELD": "kpi_yield_data",
+    "DEFECT": "kpi_defect_rate_data",
+    "PROD_EFF": "kpi_production_efficiency_data",
+    "OUTPUT": "kpi_output_rate_data",
+    "QTY_PROD": "kpi_quantity_produced_data",
+    "CYCLE_TIME": "kpi_cycle_time_data",
+    "FPY": "kpi_first_pass_yield_data",
+    "REWORK": "kpi_rework_rate_data",
+
+    # Maintenance KPIs
+    "DOWNTIME": "kpi_downtime_data",
+    "MTBF": "kpi_mean_time_between_failures_data",
+    "MTTR": "kpi_mean_time_to_repair_data",
+    "MTBS": "kpi_mean_time_between_stoppages_data",
+    "MAINT_COMP": "kpi_maintenance_compliance_data",
+    "PLAN_MAINT": "kpi_planned_maintenance_data",
+
+    # Energy KPIs
+    "ENERGY_EFF": "kpi_energy_efficiency_data",
+    "ENERGY_USE": "kpi_energy_used_data",
+
+    # Capacity & Delivery KPIs
+    "CAPACITY": "kpi_resource_capacity_utilization_data",
+    "OTD": "kpi_on_time_delivery_data",
+
+    # Safety KPIs
+    "SAFETY": "kpi_safety_incidents_reported_data",
+}
+
+
+def get_tables_for_function(function_code: str) -> list:
+    """Get tables accessible via a function code."""
+    return FUNCTION_TABLE_MAPPING.get(function_code, [])
+
+
+def get_table_for_kpi_metric(kpi_metric_code: str) -> str:
+    """Get table name for a KPI metric code."""
+    return KPI_METRIC_TABLE_MAPPING.get(kpi_metric_code)

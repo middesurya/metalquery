@@ -9,11 +9,13 @@ SECURITY ARCHITECTURE:
 - All database access goes through Django (security boundary)
 """
 import os
+import re
 import json
 import logging
 import time
 from datetime import datetime
 from functools import wraps
+from typing import Set, Optional
 import requests
 from django.db import connection
 from django.http import JsonResponse
@@ -23,6 +25,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from .models import AuditLog
+from .services.rbac_service import RBACService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -275,8 +278,72 @@ def apply_row_level_security(sql: str, user_context: dict) -> str:
     if organization_id:
         # This is a simplified example - in production use parameterized queries
         logger.info(f"Row-level security: Filtering for org {organization_id}")
-    
+
     return sql
+
+
+# ============================================================
+# RBAC Helper Functions
+# ============================================================
+
+def get_token_from_request(request) -> Optional[str]:
+    """Extract Bearer token from Authorization header."""
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if auth_header.startswith('Bearer '):
+        return auth_header[7:]
+    return None
+
+
+def extract_tables_from_sql(sql: str) -> Set[str]:
+    """
+    Extract table names from SQL query.
+    Handles FROM, JOIN, and avoids EXTRACT(... FROM ...) false positives.
+    """
+    tables = set()
+
+    # Remove EXTRACT(... FROM ...) to avoid false positives
+    sql_cleaned = re.sub(
+        r"\bEXTRACT\s*\([^)]*\bFROM\b[^)]*\)",
+        "",
+        sql,
+        flags=re.IGNORECASE
+    )
+
+    # Remove DATE_TRUNC and similar
+    sql_cleaned = re.sub(
+        r"\bDATE_TRUNC\s*\([^)]*\)",
+        "",
+        sql_cleaned,
+        flags=re.IGNORECASE
+    )
+
+    # Extract tables from FROM and JOIN clauses
+    patterns = [
+        r"\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+        r"\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, sql_cleaned, re.IGNORECASE)
+        tables.update(m.lower() for m in matches)
+
+    return tables
+
+
+def validate_sql_tables(sql: str, allowed_tables: Set[str]) -> tuple:
+    """
+    Validate that SQL only accesses allowed tables.
+    Defense-in-depth: even if NLP service filtered schema, validate again.
+    """
+    tables_in_sql = extract_tables_from_sql(sql)
+    allowed_lower = {t.lower() for t in allowed_tables}
+
+    unauthorized = tables_in_sql - allowed_lower
+
+    if unauthorized:
+        return False, f"Access denied to tables: {', '.join(unauthorized)}"
+
+    return True, "Valid"
 
 
 # ============================================================
@@ -288,52 +355,77 @@ def apply_row_level_security(sql: str, user_context: dict) -> str:
 @rate_limit
 def chat(request):
     """
-    Main chatbot endpoint.
-    
+    Main chatbot endpoint with RBAC enforcement.
+
     Flow:
-    1. Receive natural language question from React frontend
-    2. Forward to NLP service for SQL generation (AI boundary)
-    3. Validate returned SQL (defense in depth)
-    4. Execute safely via parameterized query
-    5. Format response via NLP service
-    6. Return to frontend
-    
+    1. Authenticate user via Bearer token
+    2. Get allowed tables from RBACService
+    3. Forward to NLP service with allowed_tables whitelist
+    4. Validate returned SQL (defense in depth)
+    5. Execute safely via parameterized query
+    6. Format response via NLP service
+    7. Return to frontend
+
     Security:
+    - RBAC: Django is single source of truth for table access
     - AI never touches the database
     - All SQL validated before execution
     - Rate limiting per IP
     - Audit logging for compliance
     """
     client_ip = get_client_ip(request)
-    
+
     try:
         # Parse request body
         body = json.loads(request.body)
         question = body.get('question', '').strip()
-        
-        # Optional: Get user context for row-level security
-        user_context = {
-            'user_id': body.get('user_id'),
-            'organization_id': body.get('organization_id'),
-        }
-        
+
         if not question:
             return JsonResponse({
                 'success': False,
                 'error': 'Question is required'
             }, status=400)
-        
+
         logger.info(f"Chat request from {client_ip}: {question[:100]}...")
-        
+
         # ============================================
-        # Step 1: Call NLP Hybrid Service (SQL or BRD)
+        # Step 1: RBAC - Get allowed tables for user
+        # ============================================
+        token = get_token_from_request(request)
+        allowed_tables, user_info = RBACService.get_allowed_tables(token)
+
+        if not user_info:
+            return JsonResponse({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+
+        if not allowed_tables:
+            return JsonResponse({
+                'success': False,
+                'error': 'No table access permissions for your role'
+            }, status=403)
+
+        logger.info(f"User {user_info['username']}: {len(allowed_tables)} tables allowed")
+
+        user_context = {
+            'user_id': user_info.get('user_id'),
+            'username': user_info.get('username'),
+            'organization_id': body.get('organization_id'),
+        }
+
+        # ============================================
+        # Step 2: Call NLP Hybrid Service (SQL or BRD)
         # (AI boundary - NLP never touches database)
         # ============================================
         try:
             nlp_response = requests.post(
-                f"{NLP_SERVICE_URL}/api/v1/chat",  # ✅ New hybrid endpoint
-                json={'question': question},
-                timeout=120  # Increased for local LLM on CPU
+                f"{NLP_SERVICE_URL}/api/v1/chat",
+                json={
+                    'question': question,
+                    'allowed_tables': list(allowed_tables),  # Pass whitelist to NLP
+                },
+                timeout=120
             )
             nlp_data = nlp_response.json()
         except requests.RequestException as e:
@@ -417,7 +509,7 @@ def chat(request):
         logger.info(f"Generated SQL: {sql}")
         
         # ============================================
-        # Step 2: Validate SQL (Defense in Depth)
+        # Step 3: Validate SQL (Defense in Depth)
         # Django validates even after NLP service
         # ============================================
         is_valid, error = SQLValidator.validate(sql)
@@ -425,20 +517,38 @@ def chat(request):
             logger.warning(f"SQL validation failed: {error}")
             audit_logger.log_query(
                 client_ip, question, sql, False,
-                error=f"Validation: {error}"
+                error=f"Validation: {error}",
+                user_id=user_info.get('username')
             )
             return JsonResponse({
                 'success': False,
                 'error': f"Query not allowed: {error}"
             })
-        
+
         # ============================================
-        # Step 3: Apply Row-Level Security
+        # Step 4: RBAC Defense-in-Depth - Validate SQL tables
+        # Even if NLP filtered schema, validate tables again
+        # ============================================
+        is_valid, error = validate_sql_tables(sql, allowed_tables)
+        if not is_valid:
+            logger.warning(f"RBAC violation by {user_info['username']}: {error}")
+            audit_logger.log_query(
+                client_ip, question, sql, False,
+                error=f"RBAC: {error}",
+                user_id=user_info.get('username')
+            )
+            return JsonResponse({
+                'success': False,
+                'error': f'Access denied: {error}'
+            }, status=403)
+
+        # ============================================
+        # Step 5: Apply Row-Level Security
         # ============================================
         sql = apply_row_level_security(sql, user_context)
         
         # ============================================
-        # Step 4: Execute Query Safely
+        # Step 6: Execute Query Safely
         # (Django owns the database connection)
         # ============================================
         try:
@@ -457,7 +567,7 @@ def chat(request):
             })
         
         # ============================================
-        # Step 5: Format Response via NLP Service
+        # Step 7: Format Response via NLP Service
         # ============================================
         try:
             format_response = requests.post(
@@ -465,7 +575,7 @@ def chat(request):
                 json={
                     'question': question,
                     'sql': sql,
-                    'results': results,  # Send results for formatting
+                    'results': results,
                 },
                 timeout=300
             )
@@ -473,16 +583,15 @@ def chat(request):
             natural_response = format_data.get('response', f"Found {row_count} results.")
         except Exception as e:
             logger.warning(f"Response formatting failed: {e}")
-            # Fallback: return summary
             natural_response = f"Found {row_count} results."
-        
+
         # ============================================
-        # Step 6: Audit Log & Return
+        # Step 8: Audit Log & Return
         # ============================================
         audit_logger.log_query(
             client_ip, question, sql, True,
             row_count=row_count,
-            user_id=user_context.get('user_id')
+            user_id=user_info.get('username')
         )
         
         return JsonResponse({

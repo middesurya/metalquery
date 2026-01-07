@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # Django Integration
     # The NLP service now fetches schema from the Django URL, ensuring security boundary
-    django_api_url: str = os.getenv("DJANGO_API_URL", "http://127.0.0.1:8000")
+    django_api_url: str = os.getenv("DJANGO_API_URL", "http://127.0.0.1:8001")
     
     # Service Configuration
     nlp_service_host: str = os.getenv("NLP_SERVICE_HOST", "localhost")
