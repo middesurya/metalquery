@@ -12,7 +12,7 @@ const getApiUrl = () => {
 
     // Default to localhost in development
     if (process.env.NODE_ENV === 'development') {
-        return 'http://localhost:8001';
+        return 'http://localhost:8000';
     }
 
     // Production fallback

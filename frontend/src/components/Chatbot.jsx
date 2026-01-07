@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 
 // NLP Service API URL
-const NLP_API_URL = process.env.REACT_APP_NLP_API_URL || 'http://localhost:8001';
+const NLP_API_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
 
 /**
  * ChatMessage Component
