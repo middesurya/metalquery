@@ -90,25 +90,46 @@ Return ONLY valid JSON (no markdown, no explanation):
             # Clean up response
             content = content.strip()
 
-            # Remove markdown code blocks if present
+            # Remove markdown code blocks if present (handle various formats)
             if content.startswith('```'):
                 lines = content.split('\n')
-                content = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+                # Find the closing ``` more safely
+                start_idx = 1
+                end_idx = len(lines)
+                for i in range(len(lines) - 1, 0, -1):
+                    if lines[i].strip() == '```':
+                        end_idx = i
+                        break
+                content = '\n'.join(lines[start_idx:end_idx])
                 content = content.strip()
 
+            # Remove 'json' prefix if present
             if content.startswith('json'):
                 content = content[4:].strip()
 
+            # Try to extract JSON object if there's extra text
+            if not content.startswith('{'):
+                import re
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    content = json_match.group()
+
             result = json.loads(content)
+
+            # Validate result is a dict
+            if not isinstance(result, dict):
+                logger.warning(f"LLM returned non-dict: {type(result)}")
+                return self.find_goal_heuristic(data_summary, "")
 
             # Validate chart_type
             valid_types = {'gauge', 'kpi_card', 'line', 'area', 'bar', 'pie', 'metric_grid', 'table'}
             if result.get('chart_type') not in valid_types:
+                logger.warning(f"Invalid chart_type: {result.get('chart_type')}")
                 return self.find_goal_heuristic(data_summary, "")
 
             return result
 
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, IndexError, TypeError) as e:
             logger.warning(f"JSON parse error: {e}")
             return self.find_goal_heuristic(data_summary, "")
 

@@ -61,6 +61,10 @@ class VizConfigGenerator:
         x_key = goal.get("x_axis") or self._find_x_axis(results)
         y_key = goal.get("y_axis") or self._find_y_axis(results)
 
+        # Fallback to table if we can't find required keys
+        if not x_key or not y_key:
+            return self._generate_table_config(goal, results)
+
         return {
             "type": "line",
             "data": results,
@@ -96,6 +100,10 @@ class VizConfigGenerator:
         x_key = goal.get("x_axis") or self._find_categorical(results)
         y_key = goal.get("y_axis") or self._find_y_axis(results)
 
+        # Fallback to table if we can't find required keys
+        if not x_key or not y_key:
+            return self._generate_table_config(goal, results)
+
         return {
             "type": "bar",
             "data": results,
@@ -121,6 +129,10 @@ class VizConfigGenerator:
         """Generate pie chart config."""
         name_key = goal.get("x_axis") or self._find_categorical(results)
         value_key = goal.get("y_axis") or self._find_y_axis(results)
+
+        # Fallback to table if we can't find required keys
+        if not name_key or not value_key:
+            return self._generate_table_config(goal, results)
 
         return {
             "type": "pie",
@@ -179,19 +191,35 @@ class VizConfigGenerator:
         }
 
     def _generate_metric_grid_config(self, goal: Dict, results: List[Dict]) -> Dict:
-        """Generate metric grid config."""
+        """Generate metric grid config. Aggregates multiple rows if present."""
         metrics = []
 
         if results and len(results) > 0:
-            row = results[0]
-            for key, value in row.items():
-                if isinstance(value, (int, float)):
-                    unit, _ = self._detect_unit_and_max(key)
-                    metrics.append({
-                        "label": self._format_label(key),
-                        "value": round(value, 2) if isinstance(value, float) else value,
-                        "unit": unit
-                    })
+            # If single row, use values directly
+            if len(results) == 1:
+                row = results[0]
+                for key, value in row.items():
+                    if isinstance(value, (int, float)):
+                        unit, _ = self._detect_unit_and_max(key)
+                        metrics.append({
+                            "label": self._format_label(key),
+                            "value": round(value, 2) if isinstance(value, float) else value,
+                            "unit": unit
+                        })
+            else:
+                # Multiple rows: calculate averages for numeric columns
+                first_row = results[0]
+                for key in first_row.keys():
+                    values = [r.get(key) for r in results if isinstance(r.get(key), (int, float))]
+                    if values:
+                        avg_value = sum(values) / len(values)
+                        unit, _ = self._detect_unit_and_max(key)
+                        metrics.append({
+                            "label": f"Avg {self._format_label(key)}",
+                            "value": round(avg_value, 2),
+                            "unit": unit,
+                            "count": len(values)  # Include count for context
+                        })
 
         return {
             "type": "metric_grid",

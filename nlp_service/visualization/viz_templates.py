@@ -117,6 +117,7 @@ KPI_TEMPLATES = {
 def get_template_for_query(question: str, columns: List[str]) -> Optional[Dict]:
     """
     Match query to best KPI template based on question and column names.
+    Uses word boundary matching to avoid false positives.
 
     Args:
         question: User's question
@@ -125,39 +126,45 @@ def get_template_for_query(question: str, columns: List[str]) -> Optional[Dict]:
     Returns:
         Matching template or None
     """
+    import re
+
     q = question.lower()
     cols_lower = [c.lower() for c in columns]
 
-    # Direct question matches
+    # Direct question matches with word boundaries
     for kpi, template in KPI_TEMPLATES.items():
         kpi_words = kpi.replace('_', ' ')
-        if kpi_words in q or kpi in q:
+        # Use word boundaries to avoid "yield" matching "output_yield"
+        if re.search(rf'\b{re.escape(kpi_words)}\b', q) or re.search(rf'\b{re.escape(kpi)}\b', q):
             return template.copy()
 
-    # Column-based matching
+    # Column-based matching with word boundaries
     for col in cols_lower:
         for kpi, template in KPI_TEMPLATES.items():
-            if kpi in col:
+            # Match kpi at start, end, or surrounded by underscores/spaces
+            if re.search(rf'(^|_){re.escape(kpi)}(_|$)', col):
                 return template.copy()
 
-    # Keyword matching
+    # Keyword matching with word boundaries
     keyword_map = {
         'oee': ['oee', 'overall equipment', 'effectiveness'],
         'downtime': ['downtime', 'down time', 'stopped'],
-        'yield': ['yield', 'output yield'],
-        'mtbf': ['mtbf', 'mean time between', 'failures'],
-        'mttr': ['mttr', 'mean time to repair', 'repair time'],
-        'energy': ['energy', 'power', 'electricity', 'kwh'],
-        'defect': ['defect', 'defects', 'reject', 'rejected'],
+        'yield': ['yield'],  # More specific to avoid false matches
+        'mtbf': ['mtbf', 'mean time between failures'],
+        'mttr': ['mttr', 'mean time to repair'],
+        'energy': ['energy', 'power consumption', 'electricity', 'kwh'],
+        'defect': ['defect', 'defects', 'reject rate', 'rejected'],
         'production': ['production', 'output', 'produced', 'manufactured'],
-        'cycle_time': ['cycle time', 'cycle_time', 'takt'],
-        'efficiency': ['efficiency', 'efficient'],
-        'temperature': ['temperature', 'temp', 'heat']
+        'cycle_time': ['cycle time', 'cycle_time', 'takt time'],
+        'efficiency': ['efficiency'],  # More specific
+        'temperature': ['temperature', 'temp']
     }
 
     for kpi, keywords in keyword_map.items():
-        if any(kw in q for kw in keywords):
-            return KPI_TEMPLATES.get(kpi, {}).copy()
+        for kw in keywords:
+            # Word boundary matching
+            if re.search(rf'\b{re.escape(kw)}\b', q):
+                return KPI_TEMPLATES.get(kpi, {}).copy()
 
     return None
 

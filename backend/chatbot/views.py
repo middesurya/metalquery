@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 # NLP Service URL (configure in Django settings or environment)
 NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8003')
 
+# Result limits - unified across chart and table data
+MAX_CHART_DATA_POINTS = 100  # Maximum data points for chart rendering
+MAX_TABLE_RESULTS = 100      # Maximum rows returned to frontend
+
 
 # ============================================================
 # Rate Limiting
@@ -591,7 +595,7 @@ def chat(request):
         chart_config = nlp_data.get('chart_config')
         if chart_config and results:
             # Inject actual data into chart config
-            chart_config['data'] = results[:100]  # Limit data points for charts
+            chart_config['data'] = results[:MAX_CHART_DATA_POINTS]
             logger.info(f"Chart config finalized: type={chart_config.get('type')}")
 
         # ============================================
@@ -608,9 +612,9 @@ def chat(request):
             'query_type': 'sql',
             'response': natural_response,
             'sql': sql,
-            'results': results[:50],  # Limit results sent to frontend
+            'results': results[:MAX_TABLE_RESULTS],
             'row_count': row_count,
-            'chart_config': chart_config,  # NEW: Visualization config for frontend
+            'chart_config': chart_config,
             'confidence_score': nlp_data.get('confidence_score'),
             'relevance_score': nlp_data.get('relevance_score')
         })

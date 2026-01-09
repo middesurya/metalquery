@@ -177,9 +177,11 @@ const AreaChartView = ({ config, data }) => {
 // Gauge Chart Component (Radial Progress)
 const GaugeChart = ({ config, data }) => {
     const options = config.options || {};
-    const value = config.data?.value || (data && data[0] ? Object.values(data[0])[0] : 0);
-    const max = config.data?.max || 100;
-    const percentage = Math.min((value / max) * 100, 100);
+    // Type-safe value extraction with Number() coercion
+    const rawValue = config.data?.value ?? (data && data[0] ? Object.values(data[0])[0] : 0);
+    const value = Number(rawValue) || 0;
+    const max = Number(config.data?.max) || 100;
+    const percentage = Math.min(Math.max((value / max) * 100, 0), 100); // Clamp between 0-100
     const unit = options.unit || '';
     const title = options.title || 'Value';
 
@@ -226,10 +228,12 @@ const GaugeChart = ({ config, data }) => {
 // KPI Card Component
 const KPICard = ({ config, data }) => {
     const options = config.options || {};
-    const value = config.data?.value || (data && data[0] ? Object.values(data[0])[0] : 0);
+    // Type-safe value extraction
+    const rawValue = config.data?.value ?? (data && data[0] ? Object.values(data[0])[0] : 0);
+    const value = typeof rawValue === 'number' ? rawValue : (Number(rawValue) || rawValue || 0);
     const unit = options.unit || '';
     const title = options.title || 'Metric';
-    const trend = options.trend;
+    const trend = options.trend ? Number(options.trend) : null;
     const color = options.color || COLORS.primary;
 
     return (
@@ -268,6 +272,35 @@ const MetricGrid = ({ config, data }) => {
         </div>
     );
 };
+
+/**
+ * ChartErrorBoundary - Error boundary for chart rendering failures
+ */
+class ChartErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('Chart rendering error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="chart-error">
+                    <p>Unable to render chart. Showing data table instead.</p>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 /**
  * ChartRenderer - Main chart dispatcher component
@@ -309,12 +342,14 @@ const ChartRenderer = ({ config, data }) => {
     }
 
     return (
-        <div className="chart-container">
-            {config.options?.title && config.type !== 'gauge' && config.type !== 'kpi_card' && (
-                <div className="chart-title">{config.options.title}</div>
-            )}
-            <ChartComponent config={config} data={arrayData} />
-        </div>
+        <ChartErrorBoundary>
+            <div className="chart-container">
+                {config.options?.title && config.type !== 'gauge' && config.type !== 'kpi_card' && (
+                    <div className="chart-title">{config.options.title}</div>
+                )}
+                <ChartComponent config={config} data={arrayData} />
+            </div>
+        </ChartErrorBoundary>
     );
 };
 
