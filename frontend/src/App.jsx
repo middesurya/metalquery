@@ -5,7 +5,7 @@ import config from './config';
 // Django Backend API URL (React → Django → NLP → LLM)
 // Security: React calls Django, which owns the database
 // AI service never touches the database directly
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = config.API_URL;
 
 /**
  * Format number with commas and units
@@ -414,12 +414,42 @@ function App() {
         setIsLoading(true);
 
         try {
+            // Get auth token from localStorage (set during login)
+            const token = localStorage.getItem('authToken');
+
             // Call Django backend (which calls NLP service internally)
             const response = await fetch(`${API_URL}/api/chatbot/chat/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
                 body: JSON.stringify({ question: text })
             });
+
+            // Handle auth errors
+            if (response.status === 401) {
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    text: "Session expired or not authenticated. Please log in to access the chatbot.",
+                    isUser: false,
+                    timestamp: new Date().toISOString()
+                }]);
+                setIsLoading(false);
+                return;
+            }
+
+            if (response.status === 403) {
+                const errorData = await response.json();
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    text: `Access denied: ${errorData.error || 'Your role may not have permission for this data.'}`,
+                    isUser: false,
+                    timestamp: new Date().toISOString()
+                }]);
+                setIsLoading(false);
+                return;
+            }
 
             const data = await response.json();
 

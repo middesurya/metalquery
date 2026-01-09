@@ -1282,20 +1282,40 @@ FEW_SHOT_EXAMPLES = [
 def find_best_table(question: str) -> Optional[str]:
     """Find best matching table based on question keywords."""
     question_lower = question.lower()
-    
+
     best_match = None
     best_score = 0
-    
+
     for table_name, info in TABLE_SCHEMA.items():
         score = 0
         for keyword in info.get("keywords", []):
             if keyword in question_lower:
                 score += len(keyword)  # Longer matches score higher
-        
+
         if score > best_score:
             best_score = score
             best_match = table_name
-    
+
+    return best_match
+
+
+def find_best_table_filtered(question: str, schema: Dict) -> Optional[str]:
+    """Find best matching table from filtered schema based on question keywords."""
+    question_lower = question.lower()
+
+    best_match = None
+    best_score = 0
+
+    for table_name, info in schema.items():
+        score = 0
+        for keyword in info.get("keywords", []):
+            if keyword in question_lower:
+                score += len(keyword)  # Longer matches score higher
+
+        if score > best_score:
+            best_score = score
+            best_match = table_name
+
     return best_match
 
 
@@ -1327,28 +1347,45 @@ def resolve_aggregation(question: str, table_name: str) -> str:
     return TABLE_SCHEMA.get(table_name, {}).get("aggregation", "AVG")
 
 
-def build_prompt_with_schema(schema_dict: Dict, question: str) -> str:
+def build_prompt_with_schema(
+    schema_dict: Dict,
+    question: str,
+    allowed_tables: List[str] = None
+) -> str:
     """
     Build enhanced prompt with schema analysis and JOIN support (v3.0).
-    
+
     Args:
         schema_dict: Complete TABLE_SCHEMA mapping
         question: User's natural language question
-    
+        allowed_tables: Optional RBAC whitelist - if provided, filter TABLE_SCHEMA
+
     Returns:
         Production-ready prompt for LLM
     """
-    
-    # Find best matching table
 
-    best_table = find_best_table(question)
+    # ════════════════════════════════════════════════════════
+    # RBAC: Filter TABLE_SCHEMA to allowed tables only
+    # ════════════════════════════════════════════════════════
+    working_schema = TABLE_SCHEMA
+    if allowed_tables:
+        allowed_set = set(allowed_tables)
+        working_schema = {
+            table: info
+            for table, info in TABLE_SCHEMA.items()
+            if table in allowed_set
+        }
+        logger.info(f"🔐 RBAC: Schema filtered to {len(working_schema)}/{len(TABLE_SCHEMA)} tables")
+
+    # Find best matching table from FILTERED schema
+    best_table = find_best_table_filtered(question, working_schema)
     table_hint = ""
-    
-    if best_table and best_table in TABLE_SCHEMA:
-        info = TABLE_SCHEMA[best_table]
+
+    if best_table and best_table in working_schema:
+        info = working_schema[best_table]
         user_aggregation = resolve_aggregation(question, best_table)
         table_default = info['aggregation']
-        
+
         # Build aggregation hint
         if user_aggregation == "NONE":
             agg_hint = "NO AGGREGATION - return raw rows with LIMIT and ORDER BY date"
@@ -1356,7 +1393,7 @@ def build_prompt_with_schema(schema_dict: Dict, question: str) -> str:
             agg_hint = f"USER REQUESTED: {user_aggregation}() ← PRIORITY! (overrides default {table_default})"
         else:
             agg_hint = f"Use {user_aggregation}() for aggregation"
-        
+
         table_hint = f"""
 HINT FOR THIS QUERY:
 ─ Best matching table: {best_table}
@@ -1368,15 +1405,15 @@ HINT FOR THIS QUERY:
 ─ Filter by 'furnace_no' for furnace-specific data
 ─ IMPORTANT: User-requested aggregation OVERRIDES table default!
 """
-    
-    # Build TRIMMED schema text - only top 5 candidate tables, not all 29
+
+    # Build TRIMMED schema text - only top 5 candidate tables from FILTERED schema
     # This reduces noise and helps model focus on the hint
     schema_text = "\nRELEVANT TABLES (candidates):\n"
-    
-    # Get top 5 tables by keyword match score
+
+    # Get top 5 tables by keyword match score from filtered schema
     question_lower = question.lower()
     table_scores = []
-    for table_name, info in TABLE_SCHEMA.items():
+    for table_name, info in working_schema.items():
         score = sum(len(kw) for kw in info.get("keywords", []) if kw in question_lower)
         table_scores.append((table_name, info, score))
     

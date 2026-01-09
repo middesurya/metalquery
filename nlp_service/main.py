@@ -88,6 +88,7 @@ red_team_detector = None
 class GenerateSQLRequest(BaseModel):
     question: str
     tables: Optional[List[str]] = None
+    allowed_tables: Optional[List[str]] = None  # RBAC: table whitelist from Django
 
 class GenerateSQLResponse(BaseModel):
     success: bool
@@ -299,11 +300,17 @@ async def generate_sql(request: GenerateSQLRequest):
         validation_warnings = []
         
         # ════════════════════════════════════════════════════════
-        # STEP 1: Schema-Aware Prompt
+        # STEP 1: Schema-Aware Prompt (with RBAC filtering)
         # ════════════════════════════════════════════════════════
         logger.info("📝 Building schema-aware prompt...")
+        if request.allowed_tables:
+            logger.info(f"🔐 RBAC: Filtering to {len(request.allowed_tables)} allowed tables")
         try:
-            prompt = build_prompt_with_schema(schema_dict, request.question)
+            prompt = build_prompt_with_schema(
+                schema_dict,
+                request.question,
+                allowed_tables=request.allowed_tables  # Pass RBAC whitelist
+            )
             logger.info(f"✓ Prompt: {len(prompt)} chars")
         except Exception as e:
             logger.warning(f"Enhanced prompt failed: {e}, using basic")
@@ -538,6 +545,7 @@ async def format_response(request: FormatResponseRequest):
 class HybridChatRequest(BaseModel):
     question: str
     force_type: Optional[str] = None  # "sql" or "brd" to bypass auto-detection
+    allowed_tables: Optional[List[str]] = None  # RBAC: table whitelist from Django
 
 class HybridChatResponse(BaseModel):
     success: bool
@@ -687,8 +695,11 @@ async def hybrid_chat(request: HybridChatRequest):
         
         # Handle SQL queries
         if query_type == "sql" or query_type == "unknown":
-            # Use existing SQL generation logic
-            sql_request = GenerateSQLRequest(question=request.question)
+            # Use existing SQL generation logic with RBAC table filtering
+            sql_request = GenerateSQLRequest(
+                question=request.question,
+                allowed_tables=request.allowed_tables  # Pass RBAC whitelist
+            )
             sql_response = await generate_sql(sql_request)
             
             # ═══════════════════════════════════════════════════════════

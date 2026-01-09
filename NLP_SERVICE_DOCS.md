@@ -1,15 +1,15 @@
-# MetalQuery - NLP-to-SQL + BRD RAG Service Documentation
+# MetalQuery - NLP Service Documentation
 
 A hybrid natural language system for the IGNIS industrial furnace database. Converts questions to SQL queries or answers from BRD documents.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    FRONTEND     │────▶│  DJANGO BACKEND │────▶│   NLP SERVICE   │
-│    (React)      │     │   (Port 8000)   │     │   (Port 8004)   │
+│    (React)      │     │   (Port 8001)   │     │   (Port 8003)   │
 │    Port 5173    │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                        │
@@ -22,134 +22,81 @@ A hybrid natural language system for the IGNIS industrial furnace database. Conv
                                                          └───────────┘
 ```
 
+### Key Principles
+- **Django** owns the database connection
+- **NLP Service** only generates SQL, never executes it
+- **RBAC** filtering happens at Django, allowed_tables sent to NLP
+- All SQL is validated before execution (defense in depth)
+
 ### Multimodal RAG Features
 - **961 text chunks** from 33 BRD PDF documents
 - **389 extracted images** (screenshots, diagrams, flowcharts)
 - **Intelligent filtering** removes logos, icons, and repeated headers
 - **Image lightbox** for full-size image viewing
 
-### Security Boundary
-- **Django** owns the database connection
-- **NLP Service** only generates SQL, never executes it
-- All SQL is validated before execution (defense in depth)
-
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 metalquery/
-├── .env                       # Environment variables (REQUIRED)
-├── .env.example               # Template for .env
-├── start_services.bat         # One-click startup script
-│
-├── backend/                   # Django Backend (Port 8000)
+├── backend/                   # Django Backend (Port 8001)
 │   ├── chatbot/
-│   │   ├── views.py          # Chat API, SQL validation & execution
+│   │   ├── views.py          # Chat API, RBAC enforcement, SQL execution
 │   │   ├── urls.py           # Routes (/chat/, /schema/, /health/)
-│   │   └── relevant_models.py # Exposed tables whitelist
+│   │   └── services/
+│   │       └── rbac_service.py # Token → allowed_tables resolution
 │   ├── ignis/
-│   │   └── models.py         # Django ORM models for KPI tables
-│   ├── config/
-│   │   └── settings.py       # Django settings (reads from .env)
-│   └── manage.py
+│   │   ├── models.py         # Django ORM models for KPI tables
+│   │   └── schema/
+│   │       └── exposed_tables.py # Permission mappings
+│   └── config/
+│       └── settings.py       # Django settings
 │
 ├── nlp_service/               # FastAPI NLP Service (Port 8003)
 │   ├── main.py               # FastAPI app, hybrid SQL+BRD routing
 │   ├── config.py             # Loads GROQ_API_KEY from .env
 │   ├── prompts_v2.py         # Schema-aware prompts (29 tables)
-│   ├── diagnostic.py         # SQL validation diagnostics
-│   ├── guardrails.py         # SQL security validation
-│   ├── schema_loader.py      # Fetches schema from Django
 │   ├── query_router.py       # Routes questions to SQL or BRD
 │   ├── brd_rag.py            # BRD document retrieval
-│   ├── brd_loader.py         # PDF ingestion for BRD
+│   ├── security/             # Security modules
+│   │   ├── flipping_detector.py
+│   │   ├── anomaly_detector.py
+│   │   └── sql_validator.py
 │   ├── brd/                   # BRD PDF documents
 │   └── chroma_db/             # Vector database for BRD
 │
-└── frontend/                  # React Frontend (Port 3000)
+└── frontend/                  # React Frontend (Port 5173)
     └── src/
         ├── App.jsx           # Main chat interface
-        └── config.js         # API configuration
+        └── config.js         # API configuration (port 8001)
 ```
 
 ---
 
-## ⚙️ Environment Configuration
+## Quick Start
 
-### Required `.env` File
+### Start Services
 
-Copy `.env.example` to `.env` and fill in your values:
-
-```env
-# PostgreSQL Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASSWORD=your_password_here
-
-# Django
-DJANGO_SECRET_KEY=your-secret-key
-DEBUG=True
-
-# NLP Service
-NLP_SERVICE_HOST=localhost
-NLP_SERVICE_PORT=8004
-NLP_SERVICE_URL=http://localhost:8004
-
-# LLM (REQUIRED - Get from https://console.groq.com/keys)
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
-```
-
-### Configuration Files
-
-| File | Purpose |
-|------|---------|
-| `nlp_service/config.py` | Loads GROQ_API_KEY, validates on startup |
-| `backend/config/settings.py` | Django settings, database connection |
-| `frontend/src/config.js` | API URL configuration |
-
----
-
-## 🚀 Quick Start
-
-### Option 1: Use Startup Script
-```powershell
-cd metalquery
-.\start_services.bat
-```
-
-### Option 2: Manual Start
-
-**Terminal 1: Django Backend**
 ```bash
+# Terminal 1: Django Backend (Port 8001)
 cd backend
-..\venv\Scripts\activate
-python manage.py runserver
-# Runs on http://localhost:8000
-```
+python manage.py runserver 8001
 
-**Terminal 2: NLP Service**
-```bash
+# Terminal 2: NLP Service (Port 8003)
 cd nlp_service
-..\venv\Scripts\activate
 python main.py
-# Runs on http://localhost:8004
 # Loads 289 dynamic keywords from schema
-```
+# Initializes BRD RAG (961 chunks, 389 images)
 
-**Terminal 3: React Frontend**
-```bash
+# Terminal 3: React Frontend (Port 5173)
 cd frontend
 npm start
-# Runs on http://localhost:3000
 ```
 
 ---
 
-## 📊 Supported Tables (29 Total)
+## Supported Tables (29 Total)
 
 ### KPI Tables (20)
 
@@ -197,20 +144,48 @@ npm start
 
 ---
 
-## 🧠 SQL Generation Logic
+## RBAC Integration
+
+### How It Works
+
+1. **Django receives request** with Bearer token
+2. **RBACService** resolves token → user → roles → permissions
+3. **allowed_tables** whitelist is built from:
+   - Function code permissions (PLT_CFG, FUR_MNT, etc.)
+   - KPI metric permissions (OEE, DOWNTIME, etc.)
+4. **NLP Service** receives `{question, allowed_tables}`
+5. **Schema filtering** in prompts_v2.py filters TABLE_SCHEMA
+6. **LLM only sees** user's permitted tables
+
+### Schema Filtering (prompts_v2.py)
+
+```python
+def build_prompt_with_schema(question: str, allowed_tables: list = None):
+    """Build prompt with filtered schema based on RBAC permissions."""
+
+    if allowed_tables:
+        # Filter TABLE_SCHEMA to only include allowed tables
+        filtered_schema = {
+            table: info
+            for table, info in TABLE_SCHEMA.items()
+            if table in allowed_tables
+        }
+    else:
+        filtered_schema = TABLE_SCHEMA
+
+    # Build prompt with filtered schema
+    schema_text = format_schema(filtered_schema)
+    return f"{SYSTEM_PROMPT}\n\nAvailable tables:\n{schema_text}"
+```
+
+---
+
+## SQL Generation Logic
 
 ### Query Routing (`query_router.py`)
 The system automatically routes questions to:
 - **SQL Path**: For data queries (OEE, downtime, production, etc.)
 - **BRD Path**: For documentation/process questions
-
-### Prompt Engineering (`prompts_v2.py`)
-
-**Key Components:**
-1. **TABLE_SCHEMA**: Complete mapping of 29 tables with columns, value columns, and aggregation types
-2. **SYSTEM_PROMPT**: Comprehensive SQL generation rules
-3. **FEW_SHOT_EXAMPLES**: 30+ example queries for pattern learning
-4. **SchemaAnalyzer**: Finds best matching table for questions
 
 ### Aggregation Rules
 
@@ -221,110 +196,92 @@ The system automatically routes questions to:
 | "count", "how many" | COUNT() | How many events |
 | "trend", "show" | NONE | Show OEE trend (raw data) |
 
-### Critical SQL Rules
-
-```
-CRITICAL SQL RULES FOR AGGREGATION:
-├─ If using aggregate functions (SUM, AVG, COUNT) WITHOUT GROUP BY:
-│   └─ DO NOT use ORDER BY (single aggregate result)
-├─ If using aggregate functions WITH GROUP BY:
-│   └─ ORDER BY must use GROUP BY columns or aggregate expressions
-├─ If NOT using aggregate functions:
-│   └─ ORDER BY can use any column (e.g., ORDER BY date DESC)
-```
-
----
-
-## Example Queries
-
-### Simple Aggregations
-```
-✅ "Average OEE for Furnace 1 last month"
-✅ "Total downtime by furnace"
-✅ "Total downtime last year"
-✅ "Which furnace has highest OEE?"
-```
-
-### Trend/Raw Data Queries
-```
-✅ "Show OEE trend for Furnace 2"
-✅ "Recent tap production"
-✅ "Defect rate trend for Furnace 2"
-```
-
-### Multi-Table JOINs
-```
-✅ "Average OEE by furnace with furnace names"
-✅ "Downtime events with reasons for Furnace 1"
-✅ "OEE by plant"
-```
-
 ---
 
 ## API Endpoints
 
-### Django Backend (Port 8000)
+### Django Backend (Port 8001)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chatbot/chat/` | POST | Hybrid chat (SQL + BRD) |
-| `/api/chatbot/schema/` | GET | Get database schema |
-| `/api/chatbot/health/` | GET | Health check |
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/chatbot/chat/` | POST | Bearer token | Main chat endpoint |
+| `/api/chatbot/schema/` | GET | - | Get database schema |
+| `/api/chatbot/health/` | GET | - | Health check |
 
-### NLP Service (Port 8004)
+### NLP Service (Port 8003)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/chat` | POST | Hybrid endpoint (routes SQL vs BRD) |
 | `/api/v1/generate-sql` | POST | SQL generation only |
 | `/api/v1/format-response` | POST | Format results as text |
-| `/api/v1/routing-test` | GET | Test query routing |
-| `/api/v1/brd-debug` | GET | BRD RAG debug info (chunks, images, test search) |
+| `/api/v1/brd-debug` | GET | BRD RAG debug info |
 | `/api/brd-images/{file}` | GET | Serve extracted images |
 | `/health` | GET | Health check |
+
+### Request Format
+
+```json
+// POST /api/v1/chat
+{
+  "question": "Show OEE by furnace",
+  "allowed_tables": ["kpi_oee", "furnace_furnaceconfig"]
+}
+```
+
+### Response Format
+
+```json
+{
+  "success": true,
+  "type": "sql",
+  "sql": "SELECT furnace_no, AVG(oee_percentage) FROM kpi_oee GROUP BY furnace_no",
+  "confidence": 0.95
+}
+```
 
 ---
 
 ## Security Features
 
-### SQL Guardrails (`guardrails.py`)
-- ✅ Only SELECT queries allowed
-- ✅ No dangerous keywords: DROP, DELETE, INSERT, UPDATE
-- ✅ Table allowlist enforcement
-- ✅ Single statement only (no semicolon injection)
+### NLP Service Security Layers
 
-### Django Validation (Defense in Depth)
-- ✅ SQL validated again before execution
-- ✅ Blocked patterns: `pg_`, `information_schema`, `--`
-- ✅ Query timeout: 30 seconds
-- ✅ Row limit: 100 rows
+| Layer | Module | Purpose |
+|-------|--------|---------|
+| 1 | Flipping Detector | Jailbreak detection |
+| 2 | Prompt Validator | Injection signatures |
+| 3 | Red Team Detector | Attack patterns |
+| 4 | Guardrails AI | PII/profanity filter |
+| 5 | Query Guard | Relevance check |
+| 6 | Schema Filter | Only allowed tables in prompt |
 
-### Audit Logging
-- All queries logged with IP, question, SQL, success/failure
+### SQL Guardrails
+
+- Only SELECT queries allowed
+- No dangerous keywords: DROP, DELETE, INSERT, UPDATE
+- Table allowlist enforcement
+- Single statement only (no semicolon injection)
 
 ---
 
-## Development
+## Example Queries
 
-### Add New KPI Table
+### SQL Queries
+```
+"Average OEE for Furnace 1 last month"
+"Total downtime by furnace"
+"Which furnace has highest OEE?"
+"Show OEE trend for Furnace 2"
+"Defect rate trend for Furnace 2"
+```
 
-1. **Add Django Model** (`backend/ignis/models.py`)
-2. **Add to Whitelist** (`backend/chatbot/relevant_models.py`)
-3. **Add to Schema** (`nlp_service/prompts_v2.py` → `TABLE_SCHEMA`)
-4. **Add Keywords** for matching
-5. **Run Migrations**:
-   ```bash
-   python manage.py makemigrations
-   python manage.py migrate
-   ```
-
-### Modify Prompt Behavior
-
-Edit `nlp_service/prompts_v2.py`:
-- `SYSTEM_PROMPT`: Core SQL generation rules
-- `FEW_SHOT_EXAMPLES`: Add pattern examples
-- `TABLE_SCHEMA`: Table definitions and keywords
-- `resolve_aggregation()`: Override aggregation logic
+### BRD Queries
+```
+"What is EHS?"
+"How do I configure a new furnace?"
+"Explain the grading plan process"
+"What are user roles?"
+```
 
 ---
 
@@ -333,7 +290,7 @@ Edit `nlp_service/prompts_v2.py`:
 ### "NLP service unavailable"
 ```bash
 # Check if NLP service is running
-curl http://localhost:8004/health
+curl http://localhost:8003/health
 
 # Restart NLP service
 cd nlp_service
@@ -345,27 +302,11 @@ python main.py
 2. Add: `GROQ_API_KEY=your_key_here`
 3. Get free key from: https://console.groq.com/keys
 
-### SQL Validation Errors
-- Check generated SQL in terminal logs
-- Verify column names match schema
-- Use `furnace_no` not `furnace_id`
+### "Unauthorized" errors
+- Verify Bearer token is valid
+- Check user has permissions for requested tables
+- Superusers bypass RBAC (access all 29 tables)
 
 ---
 
-## Version History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 6.1.0 | Dec 2024 | Dynamic schema keywords (289 keywords), date query fix, port 8004 |
-| 6.0.0 | Dec 2024 | Multimodal RAG (text + 389 images), image lightbox, BRD search fix |
-| 5.0.0 | Dec 2024 | Hybrid SQL + BRD RAG, Query Router |
-| 4.0.0 | Dec 2024 | Schema-aware prompts, Diagnostics |
-| 3.0.0 | Dec 2024 | Multi-table JOINs support |
-| 2.0.0 | Dec 2024 | Enhanced prompts, 29 tables |
-| 1.0.0 | Dec 2024 | Initial release with Groq LLM |
-
----
-
-## 📄 License
-
-Internal Use Only - IGNIS Project
+**Last Updated:** 2026-01-06

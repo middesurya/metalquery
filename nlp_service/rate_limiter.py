@@ -95,16 +95,25 @@ class GroqRateLimiter:
         # Check request limit
         if requests_used >= self.config.requests_per_minute:
             self.blocked_requests += 1
-            wait_time = 60 - (time.time() - self.request_window[0][0])
+            if self.request_window:
+                wait_time = 60 - (time.time() - self.request_window[0][0])
+            else:
+                wait_time = 60  # Shouldn't happen, but safe fallback
             logger.warning(f"⚠️ Rate limit: {requests_used}/{self.config.requests_per_minute} requests. Wait {wait_time:.1f}s")
             return False, f"Rate limit exceeded. Please wait {wait_time:.0f} seconds."
-        
+
         # Check token limit
         if tokens_used + estimated_tokens > self.config.tokens_per_minute:
-            self.blocked_requests += 1
-            wait_time = 60 - (time.time() - self.token_window[0][0])
-            logger.warning(f"⚠️ Token limit: {tokens_used}/{self.config.tokens_per_minute} tokens. Wait {wait_time:.1f}s")
-            return False, f"Token limit exceeded. Please wait {wait_time:.0f} seconds."
+            if self.token_window:
+                # There are existing requests - need to wait for window to clear
+                self.blocked_requests += 1
+                wait_time = 60 - (time.time() - self.token_window[0][0])
+                logger.warning(f"⚠️ Token limit: {tokens_used}/{self.config.tokens_per_minute} tokens. Wait {wait_time:.1f}s")
+                return False, f"Token limit exceeded. Please wait {wait_time:.0f} seconds."
+            else:
+                # Window is empty - allow first request even if large, with warning
+                if estimated_tokens > self.config.tokens_per_minute:
+                    logger.warning(f"⚠️ Large request: {estimated_tokens} tokens exceeds {self.config.tokens_per_minute}/min limit, but allowing (window empty)")
         
         return True, "OK"
     
