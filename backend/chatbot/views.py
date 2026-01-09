@@ -586,14 +586,23 @@ def chat(request):
             natural_response = f"Found {row_count} results."
 
         # ============================================
-        # Step 8: Audit Log & Return
+        # Step 8: Finalize Chart Config with Results
+        # ============================================
+        chart_config = nlp_data.get('chart_config')
+        if chart_config and results:
+            # Inject actual data into chart config
+            chart_config['data'] = results[:100]  # Limit data points for charts
+            logger.info(f"Chart config finalized: type={chart_config.get('type')}")
+
+        # ============================================
+        # Step 9: Audit Log & Return
         # ============================================
         audit_logger.log_query(
             client_ip, question, sql, True,
             row_count=row_count,
             user_id=user_info.get('username')
         )
-        
+
         return JsonResponse({
             'success': True,
             'query_type': 'sql',
@@ -601,6 +610,7 @@ def chat(request):
             'sql': sql,
             'results': results[:50],  # Limit results sent to frontend
             'row_count': row_count,
+            'chart_config': chart_config,  # NEW: Visualization config for frontend
             'confidence_score': nlp_data.get('confidence_score'),
             'relevance_score': nlp_data.get('relevance_score')
         })

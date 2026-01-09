@@ -44,6 +44,9 @@ from security import (
     audit_logger
 )
 
+# ✅ VISUALIZATION MODULE - LIDA-inspired chart generation
+from visualization import VizPipeline
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -80,6 +83,9 @@ prompt_validator = None
 sql_injection_validator = None
 anomaly_detector = None
 red_team_detector = None
+
+# ✅ Visualization Pipeline
+viz_pipeline = None
 
 # ============================================================
 # Models
@@ -188,7 +194,16 @@ async def startup_event():
         logger.info("✓ Security module initialized (4-layer defense: Flipping, Injection, Anomaly, Audit)")
     except Exception as e:
         logger.warning(f"⚠ Security module initialization failed: {e}")
-    
+
+    # ✅ Initialize Visualization Pipeline
+    global viz_pipeline
+    try:
+        viz_pipeline = VizPipeline()
+        logger.info("✓ Visualization pipeline initialized (LIDA-inspired)")
+    except Exception as e:
+        logger.warning(f"⚠ Visualization pipeline initialization failed: {e}")
+        viz_pipeline = None
+
     logger.info("✓ Query Guard initialized")
 
 # ============================================================
@@ -554,7 +569,8 @@ class HybridChatResponse(BaseModel):
     sql: Optional[str] = None
     results: Optional[List[Any]] = None
     sources: Optional[List[str]] = None
-    images: Optional[List[Dict]] = None  # NEW: images from BRD documents
+    images: Optional[List[Dict]] = None  # images from BRD documents
+    chart_config: Optional[Dict] = None  # ✅ NEW: Visualization config for Recharts
     error: Optional[str] = None
     routing_confidence: Optional[float] = None
     confidence_score: Optional[int] = None
@@ -722,7 +738,24 @@ async def hybrid_chat(request: HybridChatRequest):
                     user_id="anonymous", sql=sql_response.sql or "",
                     result_count=0, execution_time=0, ip_address="127.0.0.1"
                 )
-            
+
+            # ✅ VISUALIZATION: Generate chart config (heuristic-based, data-independent)
+            # Full chart generation happens in Django after SQL execution with actual results
+            chart_config = None
+            if sql_response.success and viz_pipeline:
+                try:
+                    # Generate preliminary config based on question
+                    # Django will finalize with actual data
+                    chart_config = viz_pipeline.generate_config_sync(
+                        question=request.question,
+                        results=[]  # Placeholder, Django will inject actual results
+                    )
+                    if chart_config:
+                        logger.info(f"📊 Chart config generated: type={chart_config.get('type')}")
+                except Exception as e:
+                    logger.warning(f"Visualization config generation failed: {e}")
+                    chart_config = None
+
             return HybridChatResponse(
                 success=sql_response.success,
                 query_type="sql",
@@ -730,6 +763,7 @@ async def hybrid_chat(request: HybridChatRequest):
                 sql=sql_response.sql,
                 results=None,  # Results come from Django after execution
                 sources=sql_response.tables_used,
+                chart_config=chart_config,  # ✅ NEW: Visualization config
                 error=sql_response.error if not sql_response.success else None,
                 routing_confidence=confidence,
                 confidence_score=sql_response.confidence_score,

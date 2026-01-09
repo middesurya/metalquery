@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
+import ChartRenderer from './charts/ChartRenderer';
 
 // NLP Service API URL
 const NLP_API_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
@@ -45,9 +46,17 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                         </details>
                     </div>
                 )}
+                {/* Chart Visualization */}
+                {message.chart_config && message.results && message.results.length > 0 && (
+                    <ChartRenderer
+                        config={message.chart_config}
+                        data={message.results}
+                    />
+                )}
+                {/* Results Table (shown if no chart or as expandable details) */}
                 {message.results && message.results.length > 0 && (
                     <div className="message-results">
-                        <details>
+                        <details open={!message.chart_config}>
                             <summary>View Data ({message.results.length} rows)</summary>
                             <div className="results-table-wrapper">
                                 <table className="results-table">
@@ -190,7 +199,7 @@ const Chatbot = () => {
                 throw new Error(data.error || 'Failed to process question');
             }
 
-            // Create bot message with response, SQL, results, and images
+            // Create bot message with response, SQL, results, charts, and images
             const botMessage = {
                 id: Date.now() + 1,
                 text: data.response,
@@ -198,7 +207,8 @@ const Chatbot = () => {
                 sql: data.sql,
                 results: data.results,
                 row_count: data.row_count,
-                images: data.images || [],  // ✅ Multimodal: images from BRD
+                chart_config: data.chart_config,  // Visualization config
+                images: data.images || [],  // Multimodal: images from BRD
                 timestamp: new Date().toISOString()
             };
 
