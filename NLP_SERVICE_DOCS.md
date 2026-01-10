@@ -9,7 +9,7 @@ A hybrid natural language system for the IGNIS industrial furnace database. Conv
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    FRONTEND     │────▶│  DJANGO BACKEND │────▶│   NLP SERVICE   │
-│    (React)      │     │   (Port 8001)   │     │   (Port 8003)   │
+│    (React)      │     │   (Port 8000)   │     │   (Port 8003)   │
 │    Port 5173    │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                        │
@@ -40,7 +40,7 @@ A hybrid natural language system for the IGNIS industrial furnace database. Conv
 
 ```
 metalquery/
-├── backend/                   # Django Backend (Port 8001)
+├── backend/                   # Django Backend (Port 8000)
 │   ├── chatbot/
 │   │   ├── views.py          # Chat API, RBAC enforcement, SQL execution
 │   │   ├── urls.py           # Routes (/chat/, /schema/, /health/)
@@ -54,15 +54,21 @@ metalquery/
 │       └── settings.py       # Django settings
 │
 ├── nlp_service/               # FastAPI NLP Service (Port 8003)
-│   ├── main.py               # FastAPI app, hybrid SQL+BRD routing
+│   ├── main.py               # FastAPI app, hybrid SQL+BRD routing, viz pipeline
 │   ├── config.py             # Loads GROQ_API_KEY from .env
 │   ├── prompts_v2.py         # Schema-aware prompts (29 tables)
 │   ├── query_router.py       # Routes questions to SQL or BRD
 │   ├── brd_rag.py            # BRD document retrieval
+│   ├── guardrails.py         # SQL validation with comment stripping
+│   ├── sql_guardrails.py     # SQL guardrails with table allowlist
 │   ├── security/             # Security modules
 │   │   ├── flipping_detector.py
 │   │   ├── anomaly_detector.py
 │   │   └── sql_validator.py
+│   ├── visualization/        # LIDA-inspired chart generation
+│   │   ├── viz_summarizer.py
+│   │   ├── viz_goal_finder.py
+│   │   └── viz_config_generator.py
 │   ├── brd/                   # BRD PDF documents
 │   └── chroma_db/             # Vector database for BRD
 │
@@ -79,9 +85,9 @@ metalquery/
 ### Start Services
 
 ```bash
-# Terminal 1: Django Backend (Port 8001)
+# Terminal 1: Django Backend (Port 8000)
 cd backend
-python manage.py runserver 8001
+python manage.py runserver 0.0.0.0:8000
 
 # Terminal 2: NLP Service (Port 8003)
 cd nlp_service
@@ -180,6 +186,95 @@ def build_prompt_with_schema(question: str, allowed_tables: list = None):
 
 ---
 
+## Visualization Pipeline (LIDA-inspired)
+
+The NLP service includes a LIDA-inspired visualization pipeline that automatically generates Recharts-compatible chart configurations.
+
+### Pipeline Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| DataSummarizer | `viz_summarizer.py` | Column classification (numeric/categorical/temporal) |
+| VizGoalFinder | `viz_goal_finder.py` | Chart type detection using heuristic rules |
+| VizConfigGenerator | `viz_config_generator.py` | Recharts-compatible JSON config generation |
+| VizValidator | `viz_validator.py` | Config validation |
+
+### Chart Type Detection
+
+| Query Pattern | Chart Type | Example |
+|---------------|------------|---------|
+| "by furnace", "compare", "rank" | Bar | "Compare OEE between furnaces" |
+| "trend", "last week", "over time" | Line | "Show OEE trend last week" |
+| "breakdown", "by reason", "distribution" | Pie | "Downtime by reason" |
+| Single OEE/yield/percentage | Gauge | "Average OEE for all furnaces" |
+| Single total/count | KPI Card | "Total production today" |
+
+### Detection Keywords
+
+**Bar Chart triggers:**
+- `compare`, `versus`, `vs`, `between`
+- `by furnace`, `by shift`, `by machine`, `by plant`
+- `which furnace`, `which shift`, `rank`, `top`, `bottom`
+
+**Line Chart triggers:**
+- `trend`, `over time`, `history`
+- `last week`, `last month`, `last 7 days`, `last 30 days`
+- `daily`, `weekly`, `monthly`
+
+**Pie Chart triggers:**
+- `breakdown`, `distribution`, `proportion`
+- `by reason`, `by type`, `by category`, `by cause`
+
+**Gauge triggers (single row with percentage):**
+- Column contains: `oee`, `yield`, `efficiency`, `rate`, `percent`
+
+### Column Classification
+
+The `DataSummarizer` classifies columns to determine chart axes:
+
+```python
+# Temporal patterns (for X-axis in line charts)
+TEMPORAL_PATTERNS = ['date', 'timestamp', 'created_at', 'start_time', 'shift_date']
+
+# Metric patterns that look temporal but are numeric values
+METRIC_TIME_PATTERNS = ['cycle_time', 'downtime', 'mtbf', 'mttr', 'duration']
+
+# Categorical patterns (for grouping/X-axis in bar/pie)
+CATEGORICAL_PATTERNS = ['name', 'type', 'category', 'shift', 'furnace', 'reason']
+```
+
+### Generate Chart Config Endpoint
+
+```http
+POST /api/v1/generate-chart-config
+Content-Type: application/json
+
+{
+  "question": "Show OEE by furnace",
+  "results": [
+    {"furnace_no": "F1", "avg_oee": 85.5},
+    {"furnace_no": "F2", "avg_oee": 78.2}
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "chart_config": {
+    "type": "bar",
+    "data": [...],
+    "options": {
+      "xAxis": {"dataKey": "furnace_no"},
+      "bars": [{"dataKey": "avg_oee", "fill": "#3b82f6"}],
+      "title": "OEE by furnace"
+    }
+  }
+}
+```
+
+---
+
 ## SQL Generation Logic
 
 ### Query Routing (`query_router.py`)
@@ -200,7 +295,7 @@ The system automatically routes questions to:
 
 ## API Endpoints
 
-### Django Backend (Port 8001)
+### Django Backend (Port 8000)
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
@@ -214,6 +309,7 @@ The system automatically routes questions to:
 |----------|--------|-------------|
 | `/api/v1/chat` | POST | Hybrid endpoint (routes SQL vs BRD) |
 | `/api/v1/generate-sql` | POST | SQL generation only |
+| `/api/v1/generate-chart-config` | POST | Chart config generation (Recharts) |
 | `/api/v1/format-response` | POST | Format results as text |
 | `/api/v1/brd-debug` | GET | BRD RAG debug info |
 | `/api/brd-images/{file}` | GET | Serve extracted images |
@@ -309,4 +405,4 @@ python main.py
 
 ---
 
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-09

@@ -13,9 +13,10 @@ import re
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 from functools import wraps
-from typing import Set, Optional
+from typing import Set, Optional, Any, List
 import requests
 from django.db import connection
 from django.http import JsonResponse
@@ -36,6 +37,24 @@ NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8003')
 # Result limits - unified across chart and table data
 MAX_CHART_DATA_POINTS = 100  # Maximum data points for chart rendering
 MAX_TABLE_RESULTS = 100      # Maximum rows returned to frontend
+
+
+def convert_for_json(data: Any) -> Any:
+    """
+    Recursively convert non-JSON-serializable values for JSON serialization.
+    Handles: Decimal, date, datetime objects.
+    """
+    if isinstance(data, list):
+        return [convert_for_json(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: convert_for_json(value) for key, value in data.items()}
+    elif isinstance(data, Decimal):
+        return float(data)
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    elif isinstance(data, date):
+        return data.isoformat()
+    return data
 
 
 # ============================================================
@@ -590,13 +609,29 @@ def chat(request):
             natural_response = f"Found {row_count} results."
 
         # ============================================
-        # Step 8: Finalize Chart Config with Results
+        # Step 8: Generate Chart Config with Results
         # ============================================
-        chart_config = nlp_data.get('chart_config')
-        if chart_config and results:
-            # Inject actual data into chart config
-            chart_config['data'] = results[:MAX_CHART_DATA_POINTS]
-            logger.info(f"Chart config finalized: type={chart_config.get('type')}")
+        chart_config = None
+        if results and row_count <= 100:  # Only generate charts for reasonable dataset sizes
+            try:
+                # Convert Decimal values to float for JSON serialization
+                serializable_results = convert_for_json(results[:MAX_CHART_DATA_POINTS])
+                chart_response = requests.post(
+                    f"{NLP_SERVICE_URL}/api/v1/generate-chart-config",
+                    json={
+                        'question': question,
+                        'results': serializable_results,
+                    },
+                    timeout=30
+                )
+                chart_data = chart_response.json()
+                if chart_data.get('success') and chart_data.get('chart_config'):
+                    chart_config = chart_data['chart_config']
+                    # Inject data into chart config
+                    chart_config['data'] = serializable_results
+                    logger.info(f"📊 Chart config generated: type={chart_config.get('type')}")
+            except Exception as e:
+                logger.warning(f"Chart config generation failed: {e}")
 
         # ============================================
         # Step 9: Audit Log & Return

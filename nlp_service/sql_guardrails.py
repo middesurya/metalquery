@@ -15,10 +15,12 @@ class SQLGuardrails:
     """
 
     # ❌ SQL operations that must NEVER be allowed
+    # Note: REPLACE removed because REPLACE() is a safe string function.
+    # The check for SELECT-only queries already prevents REPLACE INTO statements.
     BLOCKED_KEYWORDS = {
         "INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER",
         "CREATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "CALL",
-        "MERGE", "UPSERT", "REPLACE", "LOCK", "UNLOCK",
+        "MERGE", "UPSERT", "LOCK", "UNLOCK",
         "INTO", "COPY", "LOAD", "SET", "DECLARE",  # Additional security
     }
 
@@ -47,8 +49,13 @@ class SQLGuardrails:
         if not sql or not sql.strip():
             return False, "Empty SQL query"
 
+        # Remove SQL comments (single-line -- and multi-line /* */)
+        # This allows LLM to add helpful comments without triggering security checks
+        sql_no_comments = re.sub(r'--[^\n]*', '', sql)  # Remove -- comments
+        sql_no_comments = re.sub(r'/\*.*?\*/', '', sql_no_comments, flags=re.DOTALL)  # Remove /* */ comments
+
         # Normalize SQL (collapse whitespace)
-        sql_clean = re.sub(r"\s+", " ", sql).strip()
+        sql_clean = re.sub(r"\s+", " ", sql_no_comments).strip()
         sql_upper = sql_clean.upper()
 
         # ✅ Allow SELECT and WITH only

@@ -350,6 +350,20 @@ def validate_and_execute_sql(sql: str, allowed_tables: list):
     return execute_sql(sql), None
 ```
 
+### SQL Comment Stripping (NLP Service)
+
+**File:** `nlp_service/sql_guardrails.py`
+
+Before validation, SQL comments are stripped to:
+- Allow LLM to add helpful comments without triggering security blocks
+- Prevent comment-based injection attacks
+
+```python
+# Remove SQL comments (single-line -- and multi-line /* */)
+sql_no_comments = re.sub(r'--[^\n]*', '', sql)  # Remove -- comments
+sql_no_comments = re.sub(r'/\*.*?\*/', '', sql_no_comments, flags=re.DOTALL)
+```
+
 ---
 
 ## Error Responses
@@ -488,4 +502,4 @@ This implementation provides **12-layer defense** with:
 
 ---
 
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-09

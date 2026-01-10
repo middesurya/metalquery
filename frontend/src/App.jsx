@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import config from './config';
+import ChartRenderer from './components/charts/ChartRenderer';
 
 // Django Backend API URL (React → Django → NLP → LLM)
 // Security: React calls Django, which owns the database
@@ -283,6 +284,15 @@ const ChatMessage = ({ message, isUser, onEdit, onImageClick }) => {
                     )}
                 </div>
 
+                {/* Chart Visualization - shown if chart_config is available */}
+                {message.chart_config && message.results && message.results.length > 0 && (
+                    <ChartRenderer
+                        config={message.chart_config}
+                        data={message.results}
+                    />
+                )}
+
+                {/* Results Table - shown below chart or standalone */}
                 {message.results && message.results.length > 0 && (
                     <ResultsTable results={message.results} />
                 )}
@@ -461,7 +471,7 @@ function App() {
                 isUser: false,
                 sql: data.sql,
                 results: data.results,
-                images: data.images,  // NEW: include images
+                chart_config: data.chart_config,  // Visualization config from backend
                 row_count: data.row_count,
                 images: data.images || [],  // Multimodal: images from BRD
                 confidence_score: data.confidence_score,

@@ -193,7 +193,20 @@ Return ONLY valid JSON (no markdown, no explanation):
                 "title": self._generate_title(question, numeric_cols[0])
             }
 
-        # Rule 5: Comparison → bar chart
+        # Rule 5: Distribution explicitly requested → pie chart (check BEFORE bar comparison)
+        # Keywords like "breakdown", "distribution", "proportion" trigger pie charts
+        if data_summary.get('distribution_detected') and data_summary.get('is_distribution') and row_count <= 8:
+            x_col = categorical_cols[0] if categorical_cols else None
+            y_col = numeric_cols[0] if numeric_cols else None
+            if x_col and y_col:
+                return {
+                    "chart_type": "pie",
+                    "x_axis": x_col,
+                    "y_axis": y_col,
+                    "title": self._generate_title(question, y_col)
+                }
+
+        # Rule 6: Comparison → bar chart
         if data_summary.get('comparison_detected') or data_summary.get('is_comparison'):
             x_col = categorical_cols[0] if categorical_cols else None
             y_col = numeric_cols[0] if numeric_cols else None
@@ -205,7 +218,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                     "title": self._generate_title(question, y_col)
                 }
 
-        # Rule 6: Distribution with few categories → pie chart
+        # Rule 7: Distribution with few categories → pie chart (fallback)
         if data_summary.get('is_distribution') and row_count <= 8:
             x_col = categorical_cols[0] if categorical_cols else None
             y_col = numeric_cols[0] if numeric_cols else None

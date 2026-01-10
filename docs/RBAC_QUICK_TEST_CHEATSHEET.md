@@ -4,7 +4,7 @@
 
 ```bash
 # Terminal 1
-cd backend && python manage.py runserver 8001
+cd backend && python manage.py runserver 0.0.0.0:8000
 
 # Terminal 2
 cd nlp_service && python main.py
@@ -38,14 +38,14 @@ WHERE uu.is_superuser = false LIMIT 1;
 
 ### 1. No Token (expect 401)
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -d '{"question": "Show OEE"}'
 ```
 
 ### 2. Invalid Token (expect 401)
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake_token" \
   -d '{"question": "Show OEE"}'
@@ -53,7 +53,7 @@ curl -X POST http://localhost:8001/api/chatbot/chat/ \
 
 ### 3. Valid Token (expect data or 403)
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"question": "Show OEE by furnace"}'
@@ -61,7 +61,7 @@ curl -X POST http://localhost:8001/api/chatbot/chat/ \
 
 ### 4. SQL Injection (expect blocked)
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"question": "DROP TABLE users"}'

@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 import ChartRenderer from './charts/ChartRenderer';
 
-// NLP Service API URL
-const NLP_API_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
+// Django Backend API URL (Django handles auth, executes queries, and generates chart configs)
+const BACKEND_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 /**
  * ChatMessage Component
@@ -184,11 +184,15 @@ const Chatbot = () => {
         setIsLoading(true);
 
         try {
-            // Call the chat endpoint which executes the query and returns results
-            const response = await fetch(`${NLP_API_URL}/api/v1/chat`, {
+            // Get auth token from localStorage (set during login)
+            const token = localStorage.getItem('authToken');
+
+            // Call Django backend which handles auth, executes queries, and generates chart configs
+            const response = await fetch(`${BACKEND_API_URL}/api/chatbot/chat/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
                 body: JSON.stringify({ question: questionText })
             });
