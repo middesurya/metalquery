@@ -29,7 +29,7 @@
 | Layer | Technology | Port |
 |-------|------------|------|
 | Frontend | React 18 | 5173 |
-| Backend Gateway | Django 4.2 | 8001 |
+| Backend Gateway | Django 4.2 | 8000 |
 | NLP Service | FastAPI + LangChain | 8003 |
 | LLM Provider | Groq (llama-3.3-70b) | Cloud |
 | Database | PostgreSQL | 5432 |
@@ -89,7 +89,7 @@
                                         │ Authorization: Bearer <token>
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           DJANGO BACKEND (Port 8001)                             │
+│                           DJANGO BACKEND (Port 8000)                             │
 │                        ═══════════════════════════════                           │
 │                         SECURITY GATEWAY - DB OWNER                              │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
@@ -361,7 +361,7 @@ User Input: "Show all users; DROP TABLE materials;"
 
 ```
 metalquery/
-├── backend/                      # Django (Port 8001)
+├── backend/                      # Django (Port 8000)
 │   ├── chatbot/
 │   │   ├── views.py             # Chat API, RBAC enforcement, SQL execution
 │   │   ├── urls.py              # /chat/, /schema/, /health/
@@ -377,22 +377,31 @@ metalquery/
 │   └── manage.py
 │
 ├── nlp_service/                  # FastAPI (Port 8003)
-│   ├── main.py                  # Hybrid chat endpoint, security layers
+│   ├── main.py                  # Hybrid chat endpoint, security layers, viz pipeline
 │   ├── config.py                # Groq API config
 │   ├── prompts_v2.py            # Schema filtering, 29 tables
 │   ├── query_router.py          # SQL vs BRD routing
 │   ├── brd_rag.py               # BRD document handler
+│   ├── guardrails.py            # SQL validation with comment stripping
+│   ├── sql_guardrails.py        # SQL guardrails with table allowlist
 │   ├── security/                # Security modules
 │   │   ├── flipping_detector.py
 │   │   ├── anomaly_detector.py
 │   │   ├── audit_logger.py
 │   │   └── sql_validator.py
+│   ├── visualization/           # LIDA-inspired chart generation
+│   │   ├── viz_summarizer.py    # Column classification
+│   │   ├── viz_goal_finder.py   # Chart type detection rules
+│   │   ├── viz_config_generator.py # Recharts config generation
+│   │   └── viz_validator.py     # Config validation
 │   └── brd/                     # BRD PDF documents
 │
 ├── frontend/                     # React (Port 5173)
 │   └── src/
-│       ├── App.jsx              # Main chat component
-│       └── config.js            # API configuration (port 8001)
+│       ├── App.jsx              # Main chat component, auth handling
+│       ├── config.js            # API configuration (port 8000)
+│       └── components/
+│           └── ChartRenderer.jsx # Dynamic Recharts rendering
 │
 └── docs/                         # Documentation
     ├── RBAC_WORKFLOW_DIAGRAM.md
@@ -431,7 +440,7 @@ GROQ_MODEL=llama-3.3-70b-versatile
 ```bash
 # Terminal 1: Django Backend
 cd backend
-python manage.py runserver 8001
+python manage.py runserver 8000
 
 # Terminal 2: NLP Service
 cd nlp_service
@@ -444,13 +453,86 @@ npm start
 
 ---
 
+## Infographics Pipeline
+
+The system includes a LIDA-inspired visualization pipeline that automatically generates chart configurations based on query results.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        INFOGRAPHICS GENERATION FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+  SQL Results (from Django)
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  DataSummarizer (viz_summarizer.py)                                              │
+│                                                                                  │
+│  • Classifies columns: numeric vs categorical vs temporal                        │
+│  • Detects query patterns: comparison, distribution, trend                       │
+│  • Uses METRIC_TIME_PATTERNS to prevent misclassification                        │
+│    (e.g., cycle_time is numeric, not temporal)                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  VizGoalFinder (viz_goal_finder.py)                                              │
+│                                                                                  │
+│  • Applies heuristic rules to determine chart type                               │
+│  • Rule priority:                                                                │
+│    1. Single value → gauge (OEE/yield) or kpi_card (counts)                     │
+│    2. Multi-metric row → metric_grid                                            │
+│    3. Time series data → line chart                                             │
+│    4. Trend keywords detected → line chart                                       │
+│    5. Distribution keywords → pie chart                                          │
+│    6. Comparison keywords → bar chart                                            │
+│    7. Default → table                                                            │
+└─────────────────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  VizConfigGenerator (viz_config_generator.py)                                    │
+│                                                                                  │
+│  • Generates Recharts-compatible JSON config                                     │
+│  • Applies DaVinci design system colors                                          │
+│  • Formats labels and units (OEE→%, kWh, hours)                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+  Chart Config JSON → Frontend ChartRenderer
+```
+
+### Chart Type Detection Keywords
+
+| Chart Type | Keywords / Patterns |
+|------------|---------------------|
+| **Bar** | "compare", "versus", "by furnace", "by shift", "rank", "top", "which furnace" |
+| **Line** | "trend", "over time", "last week", "last month", "daily", "history" |
+| **Pie** | "breakdown", "distribution", "by reason", "by type", "proportion" |
+| **Gauge** | Single row with OEE/yield/efficiency/rate percentage |
+| **KPI Card** | Single row with count/total/quantity |
+
+### Supported Chart Types
+
+| Type | Component | Use Case |
+|------|-----------|----------|
+| `bar` | BarChart | Categorical comparisons (by furnace, by shift) |
+| `line` | LineChart | Time series and trends |
+| `pie` | PieChart | Distribution/breakdown (≤8 categories) |
+| `gauge` | Gauge | Single percentage metric (OEE, yield) |
+| `kpi_card` | Card | Single numeric value |
+| `metric_grid` | Grid | Multiple KPIs in one row |
+| `table` | Table | Complex data (>20 rows, fallback) |
+
+---
+
 ## Summary
 
 | Component | Responsibility | Database Access |
 |-----------|---------------|-----------------|
-| React Frontend | User interface, auth token | None |
-| Django Backend | Security, RBAC, DB access | Yes (Owner) |
-| NLP Service | SQL generation, schema filtering | None |
+| React Frontend | User interface, auth token, chart rendering | None |
+| Django Backend | Security, RBAC, DB access, chart config passthrough | Yes (Owner) |
+| NLP Service | SQL generation, schema filtering, chart config | None |
 | Groq LLM | Natural language processing | None |
 | PostgreSQL | Data storage | N/A (is the DB) |
 
@@ -458,4 +540,4 @@ npm start
 
 ---
 
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-09

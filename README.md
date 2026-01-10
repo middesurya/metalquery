@@ -58,7 +58,7 @@
           │  Authorization: Bearer <token>
           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          DJANGO BACKEND (Port 8001)                              │
+│                          DJANGO BACKEND (Port 8000)                              │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
 │  │ RBAC SERVICE                                                            │    │
@@ -167,9 +167,22 @@
 
 ### SQL Generation
 - Natural Language to SQL conversion
-- Schema-aware prompts with few-shot examples
+- Schema-aware prompts with 365+ few-shot examples
 - Self-correction with confidence scoring
 - 29 KPI tables supported
+
+### Infographics/Charts (NEW)
+- Automatic chart type detection from query patterns
+- LIDA-inspired visualization pipeline
+- Recharts-compatible JSON config generation
+- Supported chart types:
+  | Type | Use Case |
+  |------|----------|
+  | Bar | Comparisons (by furnace, by shift) |
+  | Line | Trends (over time, last week) |
+  | Pie | Distributions (breakdown, by reason) |
+  | Gauge | Single OEE/yield percentage |
+  | KPI Card | Single count/total value |
 
 ### Multimodal BRD RAG
 - 33 PDF documents indexed
@@ -202,9 +215,9 @@
 ### Start Services
 
 ```bash
-# Terminal 1: Django Backend (Port 8001)
+# Terminal 1: Django Backend (Port 8000)
 cd backend
-python manage.py runserver 8001
+python manage.py runserver 8000
 
 # Terminal 2: NLP Service (Port 8003)
 cd nlp_service
@@ -260,7 +273,7 @@ npm start
 
 ## API Endpoints
 
-### Django Backend (Port 8001)
+### Django Backend (Port 8000)
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/chatbot/chat/` | POST | Bearer token | Main chat endpoint |
@@ -290,16 +303,22 @@ poc_nlp_tosql/
 │           └── exposed_tables.py  # Permission mappings
 │
 ├── nlp_service/               # FastAPI NLP microservice
-│   ├── main.py               # API + security layers
+│   ├── main.py               # API + security layers + viz pipeline
 │   ├── prompts_v2.py         # Schema filtering + LLM prompts
 │   ├── query_router.py       # SQL vs BRD routing
 │   ├── brd_rag.py            # Document retrieval
+│   ├── visualization/        # LIDA-inspired chart generation
+│   │   ├── viz_summarizer.py # Column classification
+│   │   ├── viz_goal_finder.py # Chart type detection
+│   │   └── viz_config_generator.py # Recharts config
 │   └── security/             # Security modules
 │
 ├── frontend/                  # React SPA
 │   └── src/
 │       ├── App.jsx           # Chat UI + auth handling
-│       └── config.js         # API configuration
+│       ├── config.js         # API configuration
+│       └── components/
+│           └── ChartRenderer.jsx # Dynamic Recharts rendering
 │
 └── docs/                      # Documentation
     ├── RBAC_WORKFLOW_DIAGRAM.md
@@ -314,12 +333,12 @@ poc_nlp_tosql/
 ### Quick RBAC Test
 ```bash
 # No token (expect 401)
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -d '{"question": "Show OEE"}'
 
 # With token (expect data or 403 based on permissions)
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"question": "Show OEE by furnace"}'
@@ -358,6 +377,11 @@ python test_sql_injection.py   # SQL injection tests (43 cases)
 | SQL injection (43 tests) | ✅ Blocked |
 | Defense-in-depth | ✅ |
 | Frontend → Backend | ✅ |
+| Bar chart (comparison) | ✅ |
+| Line chart (trend) | ✅ |
+| Pie chart (distribution) | ✅ |
+| Gauge (single OEE) | ✅ |
+| KPI Card (single value) | ✅ |
 
 ---
 
@@ -367,9 +391,12 @@ MIT License
 
 ---
 
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-09
 
-- Added RBAC table-level access control
-- Fixed frontend API configuration (port 8001)
-- Added comprehensive RBAC documentation
-- All security tests passing
+### Recent Changes
+- **2026-01-09**: Added infographics/charts (bar, line, pie, gauge, KPI card)
+- **2026-01-09**: Fixed SQL guardrails (comment stripping, REPLACE keyword)
+- **2026-01-09**: Fixed column classification (METRIC_TIME_PATTERNS)
+- **2026-01-06**: Added RBAC table-level access control
+- **2026-01-06**: Added comprehensive RBAC documentation
+- All security tests passing (43 SQL injection tests, 16 RBAC tests)

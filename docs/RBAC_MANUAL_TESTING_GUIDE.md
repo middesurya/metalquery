@@ -16,9 +16,9 @@ This guide covers manual testing of the Role-Based Access Control (RBAC) impleme
 ### 1. Start All Services
 
 ```bash
-# Terminal 1: Django Backend (Port 8001)
+# Terminal 1: Django Backend (Port 8000)
 cd backend
-python manage.py runserver 8001
+python manage.py runserver 8000
 
 # Terminal 2: NLP Service (Port 8003)
 cd nlp_service
@@ -33,7 +33,7 @@ npm start
 
 ```bash
 # Check Django
-curl http://localhost:8001/api/chatbot/chat/ -X POST -H "Content-Type: application/json" -d "{\"question\": \"test\"}"
+curl http://localhost:8000/api/chatbot/chat/ -X POST -H "Content-Type: application/json" -d "{\"question\": \"test\"}"
 # Expected: {"error": "Authentication required"} or 401
 
 # Check NLP Service
@@ -50,7 +50,7 @@ curl http://localhost:8003/health
 **Purpose**: Verify requests without token are rejected
 
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -d '{"question": "Show OEE data"}'
 ```
@@ -70,7 +70,7 @@ curl -X POST http://localhost:8001/api/chatbot/chat/ \
 **Purpose**: Verify invalid tokens are rejected
 
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer invalid_token_12345" \
   -d '{"question": "Show OEE data"}'
@@ -104,7 +104,7 @@ Then test with the token:
 
 ```bash
 # Replace YOUR_TOKEN with actual token from database
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"question": "Show OEE data"}'
@@ -133,7 +133,7 @@ LIMIT 1;
 ```
 
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer SUPERUSER_TOKEN" \
   -d '{"question": "Show all furnace configurations"}'
@@ -168,7 +168,7 @@ WHERE role_id = <ROLE_ID>;
 ```
 
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer LIMITED_USER_TOKEN" \
   -d '{"question": "Show plant configuration"}'
@@ -220,19 +220,19 @@ Unauthorized tables: {'secret_table'}
 
 ```bash
 # DROP TABLE attempt
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer VALID_TOKEN" \
   -d '{"question": "DROP TABLE users; SELECT * FROM kpi_oee"}'
 
 # DELETE attempt
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer VALID_TOKEN" \
   -d '{"question": "DELETE FROM kpi_oee WHERE 1=1"}'
 
 # System table access
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer VALID_TOKEN" \
   -d '{"question": "Show all tables from pg_catalog"}'
@@ -252,7 +252,7 @@ curl -X POST http://localhost:8001/api/chatbot/chat/ \
 ```
 
 ```bash
-curl -X POST http://localhost:8001/api/chatbot/chat/ \
+curl -X POST http://localhost:8000/api/chatbot/chat/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer NO_PERMISSION_USER_TOKEN" \
   -d '{"question": "Show OEE data"}'
@@ -374,7 +374,7 @@ This runs 43+ SQL injection tests and RBAC validation tests.
 ## Troubleshooting
 
 ### "Connection refused" errors
-- Ensure Django is running on port 8001
+- Ensure Django is running on port 8000
 - Ensure NLP service is running on port 8003
 
 ### "Invalid token" for known valid token
