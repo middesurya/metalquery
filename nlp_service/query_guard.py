@@ -56,7 +56,7 @@ class EnhancedQueryGuard:
     def __init__(self, confidence_threshold: float = 0.65):
         self.confidence_threshold = confidence_threshold
         self.query_history: Dict[str, List[str]] = {}
-        self.rate_limits = {"queries_per_minute": 30, "identical_queries": 3}
+        self.rate_limits = {"queries_per_minute": 30, "identical_queries": 10}  # Increased for testing
         
         # ═══════════════════════════════════════════════════════════
         # SECURITY PATTERNS 

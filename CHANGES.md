@@ -1,5 +1,96 @@
 # CHANGES.md - MetalQuery NLP-to-SQL Project
 
+## [2026-01-09] Infographics/Charts Implementation
+
+### Overview
+Implemented LIDA-inspired visualization pipeline for automatic chart generation from SQL query results.
+
+### New Features
+- **Bar Charts**: Comparison queries (by furnace, by shift, compare, rank)
+- **Line Charts**: Trend/time series queries (trend, over time, last week)
+- **Pie Charts**: Distribution queries (breakdown, by reason, by type)
+- **Gauge**: Single percentage metrics (OEE, yield, efficiency)
+- **KPI Card**: Single value totals (count, total)
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `nlp_service/visualization/viz_summarizer.py` | Column classification (numeric/categorical/temporal) |
+| `nlp_service/visualization/viz_goal_finder.py` | Chart type detection using heuristic rules |
+| `nlp_service/visualization/viz_config_generator.py` | Recharts-compatible JSON config generation |
+| `nlp_service/visualization/viz_validator.py` | Config validation |
+| `frontend/src/components/ChartRenderer.jsx` | Dynamic Recharts rendering |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `nlp_service/main.py` | Added `/api/v1/generate-chart-config` endpoint, visualization pipeline |
+| `nlp_service/guardrails.py` | Added SQL comment stripping before validation |
+| `nlp_service/sql_guardrails.py` | Added comment stripping, removed REPLACE from blocked keywords |
+| `backend/chatbot/views.py` | Added `convert_for_json()` for Decimal/date serialization |
+
+### Bug Fixes
+
+1. **"Object of type Decimal is not JSON serializable"**
+   - Added `convert_for_json()` function to handle Decimal and date types
+
+2. **"Blocked SQL operation detected: REPLACE"**
+   - Removed REPLACE from BLOCKED_KEYWORDS (REPLACE() is a safe string function)
+
+3. **"Blocked pattern: --" (SQL comments)**
+   - Added comment stripping in guardrails.py before validation
+
+4. **Metric columns classified as temporal (cycle_time, downtime_hours)**
+   - Added METRIC_TIME_PATTERNS to exclude from temporal detection
+
+5. **Bar chart instead of pie chart for "breakdown" queries**
+   - Added `_detect_distribution()` method
+   - Reordered rules so distribution-detected queries get pie charts before comparison
+
+6. **total_production classified as categorical**
+   - Fixed column classification order to check numeric values BEFORE categorical patterns
+
+7. **"Chat failed:" error with no message**
+   - HTTPException.detail was not being extracted properly
+   - Added dedicated `except HTTPException as he:` handler in `main.py:868-876`
+   - Now shows proper error messages like "Token limit exceeded. Please wait 45 seconds."
+
+8. **Queries blocked as "spam" too aggressively**
+   - Spam detection threshold was only 3 identical queries (shared across all users)
+   - Increased threshold from 3 to 10 in `query_guard.py:59`
+
+### Chart Detection Keywords (from FEW_SHOT_EXAMPLES.md)
+
+**Bar Chart triggers:**
+- `compare`, `versus`, `vs`, `between`
+- `by furnace`, `by shift`, `by machine`, `by plant`
+- `which furnace`, `rank`, `top`, `bottom`
+
+**Line Chart triggers:**
+- `trend`, `over time`, `history`
+- `last week`, `last month`, `last 7 days`, `last 30 days`
+- `daily`, `weekly`, `monthly`
+
+**Pie Chart triggers:**
+- `breakdown`, `distribution`, `proportion`
+- `by reason`, `by type`, `by category`, `by cause`
+
+### Testing Results (2026-01-09)
+
+| Test | Status |
+|------|--------|
+| Bar chart (comparison) | ✅ PASS |
+| Line chart (trend) | ✅ PASS |
+| Pie chart (distribution) | ✅ PASS |
+| Gauge (single OEE) | ✅ PASS |
+| KPI Card (single value) | ✅ PASS |
+| Empty results | ✅ PASS - Returns null |
+| Multi-dimensional data | ✅ PASS |
+
+---
+
 ## [2026-01-06] RBAC Table Access Control Implementation
 
 ### Overview

@@ -13,9 +13,10 @@ import re
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 from functools import wraps
-from typing import Set, Optional
+from typing import Set, Optional, Any, List
 import requests
 from django.db import connection
 from django.http import JsonResponse
@@ -33,6 +34,28 @@ logger = logging.getLogger(__name__)
 # NLP Service URL (configure in Django settings or environment)
 NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8003')
 
+# Result limits - unified across chart and table data
+MAX_CHART_DATA_POINTS = 100  # Maximum data points for chart rendering
+MAX_TABLE_RESULTS = 100      # Maximum rows returned to frontend
+
+
+def convert_for_json(data: Any) -> Any:
+    """
+    Recursively convert non-JSON-serializable values for JSON serialization.
+    Handles: Decimal, date, datetime objects.
+    """
+    if isinstance(data, list):
+        return [convert_for_json(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: convert_for_json(value) for key, value in data.items()}
+    elif isinstance(data, Decimal):
+        return float(data)
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    elif isinstance(data, date):
+        return data.isoformat()
+    return data
+
 
 # ============================================================
 # Rate Limiting
@@ -40,41 +63,41 @@ NLP_SERVICE_URL = os.getenv('NLP_SERVICE_URL', 'http://localhost:8003')
 
 class RateLimiter:
     """Simple in-memory rate limiter."""
-    
+
     def __init__(self, requests_per_minute: int = 30):
         self.requests_per_minute = requests_per_minute
         self.requests = {}  # IP -> list of timestamps
-    
+
     def is_allowed(self, client_ip: str) -> bool:
         """Check if request is allowed."""
         now = time.time()
         minute_ago = now - 60
-        
+
         # Get existing requests for this IP
         if client_ip not in self.requests:
             self.requests[client_ip] = []
-        
+
         # Clean old requests
         self.requests[client_ip] = [
             ts for ts in self.requests[client_ip] if ts > minute_ago
         ]
-        
+
         # Check limit
         if len(self.requests[client_ip]) >= self.requests_per_minute:
             return False
-        
+
         # Add new request
         self.requests[client_ip].append(now)
         return True
-    
+
     def get_remaining(self, client_ip: str) -> int:
         """Get remaining requests for this minute."""
         now = time.time()
         minute_ago = now - 60
-        
+
         if client_ip not in self.requests:
             return self.requests_per_minute
-        
+
         recent = [ts for ts in self.requests[client_ip] if ts > minute_ago]
         return max(0, self.requests_per_minute - len(recent))
 
@@ -87,7 +110,7 @@ def rate_limit(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         client_ip = get_client_ip(request)
-        
+
         if not rate_limiter.is_allowed(client_ip):
             logger.warning(f"Rate limit exceeded for IP: {client_ip}")
             return JsonResponse({
@@ -95,14 +118,14 @@ def rate_limit(view_func):
                 'error': 'Rate limit exceeded. Please wait a moment.',
                 'retry_after': 60
             }, status=429)
-        
+
         response = view_func(request, *args, **kwargs)
-        
+
         # Add rate limit headers
         if hasattr(response, '__setitem__'):
             response['X-RateLimit-Remaining'] = rate_limiter.get_remaining(client_ip)
             response['X-RateLimit-Limit'] = rate_limiter.requests_per_minute
-        
+
         return response
     return wrapper
 
@@ -121,7 +144,7 @@ def get_client_ip(request):
 
 class AuditLogger:
     """Audit logger for compliance and security tracking."""
-    
+
     @staticmethod
     def log_query(
         client_ip: str,
@@ -151,7 +174,7 @@ class AuditLogger:
             logger.info(f"AUDIT: Query success - User: {user_id}, Rows: {row_count}")
         else:
             logger.warning(f"AUDIT: Query failed - User: {user_id}, Error: {error}")
-        
+
         return True
 
 
@@ -167,13 +190,13 @@ class SQLValidator:
     Additional SQL validation layer in Django.
     Defense in depth - validates SQL even after NLP service validation.
     """
-    
+
     BLOCKED_KEYWORDS = {
         'INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER',
         'CREATE', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE', 'CALL',
         'INTO', 'COPY', 'LOAD', 'SET', 'DECLARE'
     }
-    
+
     BLOCKED_PATTERNS = [
         'pg_',  # PostgreSQL system tables
         'information_schema',
@@ -182,40 +205,40 @@ class SQLValidator:
         'xp_',  # SQL Server extended procedures
         'sp_',  # SQL Server stored procedures
     ]
-    
+
     @classmethod
     def validate(cls, sql: str) -> tuple:
         """
         Validate SQL query.
-        
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         if not sql or not sql.strip():
             return False, "Empty SQL query"
-        
+
         sql_upper = sql.upper().strip()
-        
+
         # Must start with SELECT
         if not sql_upper.startswith('SELECT'):
             return False, "Only SELECT queries are allowed"
-        
+
         # Check for blocked keywords
         for keyword in cls.BLOCKED_KEYWORDS:
             # Check for keyword as word (not part of another word)
             if f' {keyword} ' in f' {sql_upper} ' or sql_upper.startswith(f'{keyword} '):
                 return False, f"Blocked keyword: {keyword}"
-        
+
         # Check for blocked patterns
         sql_lower = sql.lower()
         for pattern in cls.BLOCKED_PATTERNS:
             if pattern in sql_lower:
                 return False, f"Blocked pattern: {pattern}"
-        
+
         # Check for multiple statements
         if ';' in sql.rstrip(';'):
             return False, "Multiple statements not allowed"
-        
+
         return True, "Valid"
 
 
@@ -226,11 +249,11 @@ class SQLValidator:
 def execute_safe_query(sql: str, limit: int = 100) -> list:
     """
     Execute a validated SQL query safely using Django connection.
-    
+
     Args:
         sql: The SQL query to execute
         limit: Maximum rows to return
-        
+
     Returns:
         List of result dictionaries
     """
@@ -238,7 +261,7 @@ def execute_safe_query(sql: str, limit: int = 100) -> list:
     sql_upper = sql.upper()
     if 'LIMIT' not in sql_upper:
         sql = f"{sql.rstrip(';')} LIMIT {limit}"
-    
+
     with connection.cursor() as cursor:
         cursor.execute(sql)
         columns = [col[0] for col in cursor.description]
@@ -255,16 +278,16 @@ def execute_safe_query(sql: str, limit: int = 100) -> list:
 def apply_row_level_security(sql: str, user_context: dict) -> str:
     """
     Apply row-level security filters based on user context.
-    
+
     In production, this would:
     - Add WHERE clauses for organization/tenant filtering
     - Restrict access based on user roles
     - Filter sensitive columns
-    
+
     Args:
         sql: Original SQL query
         user_context: User permissions and context
-        
+
     Returns:
         Modified SQL with security filters
     """
@@ -272,9 +295,9 @@ def apply_row_level_security(sql: str, user_context: dict) -> str:
     # In production, add filters like:
     # - WHERE organization_id = {user.org_id}
     # - WHERE is_public = true OR owner_id = {user.id}
-    
+
     organization_id = user_context.get('organization_id')
-    
+
     if organization_id:
         # This is a simplified example - in production use parameterized queries
         logger.info(f"Row-level security: Filtering for org {organization_id}")
@@ -364,7 +387,8 @@ def chat(request):
     4. Validate returned SQL (defense in depth)
     5. Execute safely via parameterized query
     6. Format response via NLP service
-    7. Return to frontend
+    7. Generate chart config (if applicable)
+    8. Return to frontend
 
     Security:
     - RBAC: Django is single source of truth for table access
@@ -438,7 +462,7 @@ def chat(request):
                 'success': False,
                 'error': 'AI service temporarily unavailable'
             }, status=503)
-        
+
         if not nlp_data.get('success'):
             error = nlp_data.get('error', 'Failed to process question')
             audit_logger.log_query(client_ip, question, None, False, error=error)
@@ -446,19 +470,19 @@ def chat(request):
                 'success': False,
                 'error': error
             })
-        
+
         query_type = nlp_data.get('query_type', 'sql')
         logger.info(f"Query type: {query_type}")
-        
+
         # ============================================
         # Handle BLOCKED Queries (Off-topic/Harmful)
         # ============================================
         if query_type == 'blocked':
             # Query Guard blocked this - return the helpful message
             response_text = nlp_data.get('response', 'I can only help with manufacturing data queries.')
-            
+
             logger.info(f"Query blocked by guard: {question[:50]}...")
-            
+
             return JsonResponse({
                 'success': True,
                 'query_type': 'blocked',
@@ -468,7 +492,7 @@ def chat(request):
                 'results': [],
                 'row_count': 0
             })
-        
+
         # ============================================
         # Handle BRD (Documentation) Queries
         # ============================================
@@ -477,13 +501,13 @@ def chat(request):
             response_text = nlp_data.get('response', 'No response from BRD documents.')
             sources = nlp_data.get('sources', [])
             images = nlp_data.get('images', [])  # NEW: get images
-            
+
             audit_logger.log_query(
                 client_ip, question, None, True,
                 row_count=0,
                 user_id=user_context.get('user_id')
             )
-            
+
             return JsonResponse({
                 'success': True,
                 'query_type': 'brd',
@@ -494,20 +518,20 @@ def chat(request):
                 'results': [],
                 'row_count': 0
             })
-        
+
         # ============================================
         # Handle SQL (Data) Queries
         # ============================================
         sql = nlp_data.get('sql')
-        
+
         if not sql:
             return JsonResponse({
                 'success': False,
                 'error': 'No SQL generated'
             })
-        
+
         logger.info(f"Generated SQL: {sql}")
-        
+
         # ============================================
         # Step 3: Validate SQL (Defense in Depth)
         # Django validates even after NLP service
@@ -546,7 +570,7 @@ def chat(request):
         # Step 5: Apply Row-Level Security
         # ============================================
         sql = apply_row_level_security(sql, user_context)
-        
+
         # ============================================
         # Step 6: Execute Query Safely
         # (Django owns the database connection)
@@ -565,7 +589,7 @@ def chat(request):
                 'success': False,
                 'error': 'Failed to execute query'
             })
-        
+
         # ============================================
         # Step 7: Format Response via NLP Service
         # ============================================
@@ -586,25 +610,51 @@ def chat(request):
             natural_response = f"Found {row_count} results."
 
         # ============================================
-        # Step 8: Audit Log & Return
+        # Step 8: Generate Chart Config with Results
+        # ============================================
+        chart_config = None
+        if results and row_count <= 100:  # Only generate charts for reasonable dataset sizes
+            try:
+                # Convert Decimal values to float for JSON serialization
+                serializable_results = convert_for_json(results[:MAX_CHART_DATA_POINTS])
+                chart_response = requests.post(
+                    f"{NLP_SERVICE_URL}/api/v1/generate-chart-config",
+                    json={
+                        'question': question,
+                        'results': serializable_results,
+                    },
+                    timeout=30
+                )
+                chart_data = chart_response.json()
+                if chart_data.get('success') and chart_data.get('chart_config'):
+                    chart_config = chart_data['chart_config']
+                    # Inject data into chart config
+                    chart_config['data'] = serializable_results
+                    logger.info(f"Chart config generated: type={chart_config.get('type')}")
+            except Exception as e:
+                logger.warning(f"Chart config generation failed: {e}")
+
+        # ============================================
+        # Step 9: Audit Log & Return
         # ============================================
         audit_logger.log_query(
             client_ip, question, sql, True,
             row_count=row_count,
             user_id=user_info.get('username')
         )
-        
+
         return JsonResponse({
             'success': True,
             'query_type': 'sql',
             'response': natural_response,
             'sql': sql,
-            'results': results[:50],  # Limit results sent to frontend
+            'results': results[:MAX_TABLE_RESULTS],
             'row_count': row_count,
+            'chart_config': chart_config,
             'confidence_score': nlp_data.get('confidence_score'),
             'relevance_score': nlp_data.get('relevance_score')
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -632,27 +682,27 @@ def get_local_schema():
     for model in RELEVANT_MODELS:
         table_name = model._meta.db_table
         description = TABLE_DESCRIPTIONS.get(table_name, f"Table: {table_name}")
-        
+
         fields = []
         for field in model._meta.get_fields():
             if field.is_relation and field.many_to_many:
                 continue  # Skip M2M for simplicity in this context if check needed
-            
+
             try:
                 # Basic field info
                 field_info = {
                     "name": field.name,
                     "type": field.get_internal_type(),
                 }
-                
+
                 # Add verbose name if available
                 if hasattr(field, 'verbose_name') and field.verbose_name:
                     field_info["description"] = str(field.verbose_name)
-                
+
                 # Add relationship info
                 if field.is_relation and field.related_model:
                     field_info["foreign_key"] = field.related_model._meta.db_table
-                
+
                 fields.append(field_info)
             except Exception:
                 continue
@@ -690,7 +740,7 @@ def schema_info(request):
 @require_http_methods(["GET"])
 def health(request):
     """Health check endpoint."""
-    
+
     # Check NLP service connectivity
     nlp_healthy = False
     try:
@@ -698,7 +748,7 @@ def health(request):
         nlp_healthy = resp.status_code == 200
     except:
         pass
-    
+
     # Check database connectivity using Django connection
     db_healthy = False
     try:
@@ -706,7 +756,7 @@ def health(request):
         db_healthy = True
     except:
         pass
-    
+
     return JsonResponse({
         'status': 'healthy' if (nlp_healthy and db_healthy) else 'degraded',
         'service': 'django-chatbot',
@@ -716,4 +766,3 @@ def health(request):
             'database': 'healthy' if db_healthy else 'unavailable'
         }
     })
-

@@ -44,6 +44,9 @@ from security import (
     audit_logger
 )
 
+# ✅ VISUALIZATION MODULE - LIDA-inspired chart generation
+from visualization import VizPipeline
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -80,6 +83,9 @@ prompt_validator = None
 sql_injection_validator = None
 anomaly_detector = None
 red_team_detector = None
+
+# ✅ Visualization Pipeline
+viz_pipeline = None
 
 # ============================================================
 # Models
@@ -188,7 +194,16 @@ async def startup_event():
         logger.info("✓ Security module initialized (4-layer defense: Flipping, Injection, Anomaly, Audit)")
     except Exception as e:
         logger.warning(f"⚠ Security module initialization failed: {e}")
-    
+
+    # ✅ Initialize Visualization Pipeline
+    global viz_pipeline
+    try:
+        viz_pipeline = VizPipeline()
+        logger.info("✓ Visualization pipeline initialized (LIDA-inspired)")
+    except Exception as e:
+        logger.warning(f"⚠ Visualization pipeline initialization failed: {e}")
+        viz_pipeline = None
+
     logger.info("✓ Query Guard initialized")
 
 # ============================================================
@@ -508,11 +523,11 @@ Return ONLY the SQL query. No explanation.
 @app.post("/api/v1/format-response", response_model=FormatResponseResponse)
 async def format_response(request: FormatResponseRequest):
     logger.info(f"Formatting: {request.question}")
-    
+
     try:
         results = request.results
         row_count = len(results)
-        
+
         if row_count == 0:
             response_text = f"No data found for: '{request.question}'"
         elif row_count == 1:
@@ -524,17 +539,75 @@ async def format_response(request: FormatResponseRequest):
                 response_text += f"\n{i}. {row}"
             if row_count > 5:
                 response_text += f"\n\n... and {row_count - 5} more rows."
-        
+
         return FormatResponseResponse(
             success=True,
             response=response_text
         )
-        
+
     except Exception as e:
         logger.error(f"Format error: {e}")
         return FormatResponseResponse(
             success=False,
             error=f"Format failed: {str(e)}"
+        )
+
+
+# ============================================================
+# ✅ CHART CONFIG ENDPOINT - Generates visualization config from results
+# ============================================================
+
+class GenerateChartConfigRequest(BaseModel):
+    question: str
+    results: List[Any]
+
+class GenerateChartConfigResponse(BaseModel):
+    success: bool
+    chart_config: Optional[Dict] = None
+    error: Optional[str] = None
+
+@app.post("/api/v1/generate-chart-config", response_model=GenerateChartConfigResponse)
+async def generate_chart_config(request: GenerateChartConfigRequest):
+    """
+    Generate chart configuration from query results.
+    Called by Django after SQL execution with actual data.
+    """
+    logger.info(f"📊 Generating chart config for: {request.question[:50]}...")
+
+    try:
+        if not viz_pipeline:
+            return GenerateChartConfigResponse(
+                success=False,
+                error="Visualization pipeline not initialized"
+            )
+
+        if not request.results:
+            return GenerateChartConfigResponse(
+                success=True,
+                chart_config=None  # No chart for empty results
+            )
+
+        # Generate chart config using the visualization pipeline
+        chart_config = viz_pipeline.generate_config_sync(
+            question=request.question,
+            results=request.results
+        )
+
+        if chart_config:
+            logger.info(f"📊 Chart config generated: type={chart_config.get('type')}")
+        else:
+            logger.info("📊 No chart suitable for this data (table recommended)")
+
+        return GenerateChartConfigResponse(
+            success=True,
+            chart_config=chart_config
+        )
+
+    except Exception as e:
+        logger.error(f"Chart config generation error: {e}")
+        return GenerateChartConfigResponse(
+            success=False,
+            error=f"Chart config generation failed: {str(e)}"
         )
 
 
@@ -554,7 +627,8 @@ class HybridChatResponse(BaseModel):
     sql: Optional[str] = None
     results: Optional[List[Any]] = None
     sources: Optional[List[str]] = None
-    images: Optional[List[Dict]] = None  # NEW: images from BRD documents
+    images: Optional[List[Dict]] = None  # images from BRD documents
+    chart_config: Optional[Dict] = None  # ✅ NEW: Visualization config for Recharts
     error: Optional[str] = None
     routing_confidence: Optional[float] = None
     confidence_score: Optional[int] = None
@@ -722,7 +796,24 @@ async def hybrid_chat(request: HybridChatRequest):
                     user_id="anonymous", sql=sql_response.sql or "",
                     result_count=0, execution_time=0, ip_address="127.0.0.1"
                 )
-            
+
+            # ✅ VISUALIZATION: Generate chart config (heuristic-based, data-independent)
+            # Full chart generation happens in Django after SQL execution with actual results
+            chart_config = None
+            if sql_response.success and viz_pipeline:
+                try:
+                    # Generate preliminary config based on question
+                    # Django will finalize with actual data
+                    chart_config = viz_pipeline.generate_config_sync(
+                        question=request.question,
+                        results=[]  # Placeholder, Django will inject actual results
+                    )
+                    if chart_config:
+                        logger.info(f"📊 Chart config generated: type={chart_config.get('type')}")
+                except Exception as e:
+                    logger.warning(f"Visualization config generation failed: {e}")
+                    chart_config = None
+
             return HybridChatResponse(
                 success=sql_response.success,
                 query_type="sql",
@@ -730,6 +821,7 @@ async def hybrid_chat(request: HybridChatRequest):
                 sql=sql_response.sql,
                 results=None,  # Results come from Django after execution
                 sources=sql_response.tables_used,
+                chart_config=chart_config,  # ✅ NEW: Visualization config
                 error=sql_response.error if not sql_response.success else None,
                 routing_confidence=confidence,
                 confidence_score=sql_response.confidence_score,
@@ -773,12 +865,21 @@ async def hybrid_chat(request: HybridChatRequest):
                 routing_confidence=confidence
             )
             
+    except HTTPException as he:
+        # HTTPException has detail attribute, not __str__
+        error_msg = he.detail if hasattr(he, 'detail') else str(he)
+        logger.error(f"Hybrid chat HTTPException: {error_msg}")
+        return HybridChatResponse(
+            success=False,
+            query_type="error",
+            error=error_msg
+        )
     except Exception as e:
         logger.error(f"Hybrid chat error: {e}", exc_info=True)
         return HybridChatResponse(
             success=False,
             query_type="unknown",
-            error=f"Chat failed: {str(e)}"
+            error=f"Chat failed: {str(e) if str(e) else type(e).__name__}"
         )
 
 

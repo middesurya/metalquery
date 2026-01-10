@@ -1,0 +1,281 @@
+/* Charts.css - DaVinci Design System Chart Styles */
+
+/* Chart Container */
+.chart-container {
+    background: rgba(26, 39, 68, 0.6);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+}
+
+.chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+/* Custom Tooltip */
+.chart-tooltip {
+    background: rgba(26, 39, 68, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.chart-tooltip .tooltip-label {
+    color: #fff;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
+}
+
+.chart-tooltip p {
+    margin: 4px 0;
+    font-size: 12px;
+}
+
+/* Gauge Chart */
+.gauge-chart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+}
+
+.gauge-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 20px;
+}
+
+.gauge-container {
+    position: relative;
+    width: 200px;
+    height: 120px;
+}
+
+.gauge-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.gauge-value-container {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.gauge-value {
+    font-size: 36px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.gauge-unit {
+    font-size: 16px;
+    color: #94a3b8;
+    margin-left: 4px;
+}
+
+/* KPI Card */
+.kpi-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+}
+
+.kpi-label {
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.kpi-value-container {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+}
+
+.kpi-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: #fff;
+    line-height: 1;
+}
+
+.kpi-unit {
+    font-size: 18px;
+    color: #94a3b8;
+}
+
+.kpi-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.kpi-trend.up {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.kpi-trend.down {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.kpi-trend.stable {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+}
+
+/* Metric Grid */
+.metric-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.metric-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.3s ease;
+}
+
+.metric-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.metric-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #fff;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+}
+
+.metric-unit {
+    font-size: 14px;
+    color: #94a3b8;
+    font-weight: normal;
+}
+
+.metric-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Recharts Overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+    stroke: rgba(255, 255, 255, 0.08);
+}
+
+.recharts-text {
+    fill: #94a3b8;
+    font-size: 12px;
+}
+
+.recharts-legend-item-text {
+    color: #94a3b8 !important;
+}
+
+.recharts-tooltip-wrapper {
+    outline: none;
+}
+
+.recharts-default-tooltip {
+    background: rgba(26, 39, 68, 0.95) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .chart-container {
+        padding: 16px;
+        margin: 12px 0;
+    }
+
+    .gauge-container {
+        width: 160px;
+        height: 100px;
+    }
+
+    .gauge-value {
+        font-size: 28px;
+    }
+
+    .kpi-value {
+        font-size: 32px;
+    }
+
+    .metric-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .metric-value {
+        font-size: 22px;
+    }
+}
+
+/* Animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chart-container {
+    animation: fadeInUp 0.4s ease-out;
+}

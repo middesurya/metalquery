@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
+import ChartRenderer from './charts/ChartRenderer';
 
-// NLP Service API URL
-const NLP_API_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
+// Django Backend API URL (Django handles auth, executes queries, and generates chart configs)
+const BACKEND_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 /**
  * ChatMessage Component
@@ -45,9 +46,17 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                         </details>
                     </div>
                 )}
+                {/* Chart Visualization */}
+                {message.chart_config && message.results && message.results.length > 0 && (
+                    <ChartRenderer
+                        config={message.chart_config}
+                        data={message.results}
+                    />
+                )}
+                {/* Results Table (shown if no chart or as expandable details) */}
                 {message.results && message.results.length > 0 && (
                     <div className="message-results">
-                        <details>
+                        <details open={!message.chart_config}>
                             <summary>View Data ({message.results.length} rows)</summary>
                             <div className="results-table-wrapper">
                                 <table className="results-table">
@@ -75,10 +84,10 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                         </details>
                     </div>
                 )}
-                {/* ✅ Multimodal: Display images from BRD documents */}
+                {/* Multimodal: Display images from BRD documents */}
                 {message.images && message.images.length > 0 && (
                     <div className="message-images">
-                        <p className="images-label">📷 Related Screenshots ({message.images.length}):</p>
+                        <p className="images-label">Related Screenshots ({message.images.length}):</p>
                         <div className="images-gallery">
                             {message.images.map((img, idx) => (
                                 <div key={idx} className="image-container">
@@ -175,11 +184,15 @@ const Chatbot = () => {
         setIsLoading(true);
 
         try {
-            // Call the chat endpoint which executes the query and returns results
-            const response = await fetch(`${NLP_API_URL}/api/v1/chat`, {
+            // Get auth token from localStorage (set during login)
+            const token = localStorage.getItem('authToken');
+
+            // Call Django backend which handles auth, executes queries, and generates chart configs
+            const response = await fetch(`${BACKEND_API_URL}/api/chatbot/chat/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
                 body: JSON.stringify({ question: questionText })
             });
@@ -190,7 +203,7 @@ const Chatbot = () => {
                 throw new Error(data.error || 'Failed to process question');
             }
 
-            // Create bot message with response, SQL, results, and images
+            // Create bot message with response, SQL, results, charts, and images
             const botMessage = {
                 id: Date.now() + 1,
                 text: data.response,
@@ -198,7 +211,8 @@ const Chatbot = () => {
                 sql: data.sql,
                 results: data.results,
                 row_count: data.row_count,
-                images: data.images || [],  // ✅ Multimodal: images from BRD
+                chart_config: data.chart_config,  // Visualization config
+                images: data.images || [],  // Multimodal: images from BRD
                 timestamp: new Date().toISOString()
             };
 
