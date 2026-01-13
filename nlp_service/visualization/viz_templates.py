@@ -15,7 +15,7 @@ COLORS = {
 
 KPI_TEMPLATES = {
     "oee": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Overall Equipment Effectiveness",
         "unit": "%",
         "max": 100,
@@ -32,7 +32,7 @@ KPI_TEMPLATES = {
         "colors": [COLORS['danger'], COLORS['warning'], COLORS['primary']]
     },
     "yield": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Production Yield",
         "unit": "%",
         "max": 100,
@@ -73,7 +73,7 @@ KPI_TEMPLATES = {
         "unit": "minutes"
     },
     "efficiency": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Efficiency",
         "unit": "%",
         "max": 100,
@@ -84,19 +84,19 @@ KPI_TEMPLATES = {
         }
     },
     "availability": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Availability",
         "unit": "%",
         "max": 100
     },
     "performance": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Performance",
         "unit": "%",
         "max": 100
     },
     "quality": {
-        "chart_type": "gauge",
+        "chart_type": "progress_bar",
         "title": "Quality Rate",
         "unit": "%",
         "max": 100
@@ -191,8 +191,8 @@ def apply_template_to_config(config: Dict, template: Dict) -> Dict:
     if template.get('unit') and config.get('options'):
         config['options']['unit'] = template['unit']
 
-    # Apply thresholds for gauge
-    if template.get('thresholds') and config.get('type') == 'gauge':
+    # Apply thresholds for progress_bar
+    if template.get('thresholds') and config.get('type') == 'progress_bar':
         config['options']['thresholds'] = template['thresholds']
 
     # Apply title if better

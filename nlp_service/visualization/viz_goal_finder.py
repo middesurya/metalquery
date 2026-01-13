@@ -27,8 +27,8 @@ DATA SUMMARY:
 USER QUESTION: "{question}"
 
 CHART TYPE OPTIONS:
-1. "gauge" - Single KPI value with progress indicator (best for: current OEE, single metric)
-2. "kpi_card" - Single metric card with optional trend (best for: one value answers)
+1. "progress_bar" - Single KPI with horizontal progress bar (best for: current OEE, percentages)
+2. "kpi_card" - Single metric card with optional trend (best for: non-percentage values)
 3. "line" - Time series line chart (best for: trends over time, historical data)
 4. "area" - Filled area chart (best for: cumulative values, volume over time)
 5. "bar" - Vertical bar chart (best for: comparing categories, rankings)
@@ -37,7 +37,7 @@ CHART TYPE OPTIONS:
 8. "table" - Raw data table (best for: detailed multi-column data, complex queries)
 
 DECISION RULES:
-- Single numeric value (1 row, 1-2 numeric columns) → "gauge" or "kpi_card"
+- Single numeric value (1 row, 1-2 numeric columns) → "progress_bar" or "kpi_card"
 - Time series with dates → "line" or "area"
 - Comparing across categories (furnaces, shifts) → "bar"
 - Percentage breakdown or distribution → "pie"
@@ -122,7 +122,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                 return self.find_goal_heuristic(data_summary, "")
 
             # Validate chart_type
-            valid_types = {'gauge', 'kpi_card', 'line', 'area', 'bar', 'pie', 'metric_grid', 'table'}
+            valid_types = {'progress_bar', 'kpi_card', 'line', 'area', 'bar', 'pie', 'metric_grid', 'table'}
             if result.get('chart_type') not in valid_types:
                 logger.warning(f"Invalid chart_type: {result.get('chart_type')}")
                 return self.find_goal_heuristic(data_summary, "")
@@ -149,15 +149,15 @@ Return ONLY valid JSON (no markdown, no explanation):
         categorical_cols = data_summary.get('categorical_columns', [])
         temporal_cols = data_summary.get('temporal_columns', [])
 
-        # Rule 1: Single value → gauge or kpi_card
+        # Rule 1: Single value → progress_bar or kpi_card
         if data_summary.get('is_single_value'):
             y_col = numeric_cols[0] if numeric_cols else None
             title = self._generate_title(question, y_col)
 
-            # Use gauge for percentage metrics
+            # Use progress_bar for percentage metrics
             if y_col and any(p in y_col.lower() for p in ['percent', 'oee', 'yield', 'rate', 'efficiency']):
                 return {
-                    "chart_type": "gauge",
+                    "chart_type": "progress_bar",
                     "y_axis": y_col,
                     "title": title
                 }

@@ -15,7 +15,7 @@ class VizConfigValidator:
     """
 
     ALLOWED_CHART_TYPES = {
-        "line", "bar", "pie", "gauge", "area",
+        "line", "bar", "pie", "progress_bar", "area",
         "scatter", "kpi_card", "metric_grid", "table"
     }
 
@@ -180,7 +180,7 @@ class VizConfigValidator:
             if data is not None and not isinstance(data, list):
                 return False, f"'{chart_type}' chart requires array data"
 
-        if chart_type in ('gauge', 'kpi_card'):
+        if chart_type in ('progress_bar', 'kpi_card'):
             if data is not None and not isinstance(data, (dict, list)):
                 return False, f"'{chart_type}' chart requires object or array data"
 

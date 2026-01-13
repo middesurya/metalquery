@@ -174,52 +174,37 @@ const AreaChartView = ({ config, data }) => {
     );
 };
 
-// Gauge Chart Component (Radial Progress)
-const GaugeChart = ({ config, data }) => {
+// Progress Bar Card Component (Replaces Gauge)
+const ProgressBarCard = ({ config, data }) => {
     const options = config.options || {};
     // Type-safe value extraction with Number() coercion
     const rawValue = config.data?.value ?? (data && data[0] ? Object.values(data[0])[0] : 0);
     const value = Number(rawValue) || 0;
     const max = Number(config.data?.max) || 100;
     const percentage = Math.min(Math.max((value / max) * 100, 0), 100); // Clamp between 0-100
-    const unit = options.unit || '';
+    const unit = options.unit || '%';
     const title = options.title || 'Value';
 
-    // Determine color based on thresholds
-    const thresholds = options.thresholds || {};
-    let color = COLORS.primary;
-    if (percentage < 50) color = thresholds.low?.color || COLORS.danger;
-    else if (percentage < 80) color = thresholds.medium?.color || COLORS.warning;
-    else color = thresholds.high?.color || COLORS.success;
+    // Threshold colors: Red < 50%, Amber 50-79%, Green >= 80%
+    let color = COLORS.success; // green (default for >= 80%)
+    if (percentage < 50) color = COLORS.danger; // red
+    else if (percentage < 80) color = COLORS.warning; // amber
 
     return (
-        <div className="gauge-chart">
-            <div className="gauge-title">{title}</div>
-            <div className="gauge-container">
-                <svg viewBox="0 0 100 60" className="gauge-svg">
-                    {/* Background arc */}
-                    <path
-                        d="M 10 50 A 40 40 0 0 1 90 50"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.1)"
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                    />
-                    {/* Value arc */}
-                    <path
-                        d="M 10 50 A 40 40 0 0 1 90 50"
-                        fill="none"
-                        stroke={color}
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        strokeDasharray={`${percentage * 1.26} 126`}
-                        style={{ transition: 'stroke-dasharray 0.5s ease' }}
-                    />
-                </svg>
-                <div className="gauge-value-container">
-                    <span className="gauge-value" style={{ color }}>{value.toLocaleString()}</span>
-                    <span className="gauge-unit">{unit}</span>
-                </div>
+        <div className="progress-bar-card">
+            <div className="progress-bar-title">{title}</div>
+            <div className="progress-bar-value">
+                {value.toLocaleString()}<span className="progress-bar-unit">{unit}</span>
+            </div>
+            <div className="progress-bar-track">
+                <div
+                    className="progress-bar-fill"
+                    style={{
+                        width: `${percentage}%`,
+                        backgroundColor: color,
+                        transition: 'width 0.5s ease, background-color 0.3s ease'
+                    }}
+                />
             </div>
         </div>
     );
@@ -319,7 +304,7 @@ const ChartRenderer = ({ config, data }) => {
 
     // Skip rendering if no meaningful data
     if (!arrayData || (Array.isArray(arrayData) && arrayData.length === 0)) {
-        if (config.type !== 'gauge' && config.type !== 'kpi_card') {
+        if (config.type !== 'progress_bar' && config.type !== 'kpi_card') {
             return null;
         }
     }
@@ -329,7 +314,7 @@ const ChartRenderer = ({ config, data }) => {
         'bar': BarChartView,
         'pie': PieChartView,
         'area': AreaChartView,
-        'gauge': GaugeChart,
+        'progress_bar': ProgressBarCard,
         'kpi_card': KPICard,
         'metric_grid': MetricGrid
     };
@@ -344,7 +329,7 @@ const ChartRenderer = ({ config, data }) => {
     return (
         <ChartErrorBoundary>
             <div className="chart-container">
-                {config.options?.title && config.type !== 'gauge' && config.type !== 'kpi_card' && (
+                {config.options?.title && config.type !== 'progress_bar' && config.type !== 'kpi_card' && (
                     <div className="chart-title">{config.options.title}</div>
                 )}
                 <ChartComponent config={config} data={arrayData} />

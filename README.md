@@ -181,7 +181,7 @@
   | Bar | Comparisons (by furnace, by shift) |
   | Line | Trends (over time, last week) |
   | Pie | Distributions (breakdown, by reason) |
-  | Gauge | Single OEE/yield percentage |
+  | Progress Bar | Single OEE/yield percentage |
   | KPI Card | Single count/total value |
 
 ### Multimodal BRD RAG
@@ -380,7 +380,7 @@ python test_sql_injection.py   # SQL injection tests (43 cases)
 | Bar chart (comparison) | ✅ |
 | Line chart (trend) | ✅ |
 | Pie chart (distribution) | ✅ |
-| Gauge (single OEE) | ✅ |
+| Progress Bar (single OEE) | ✅ |
 | KPI Card (single value) | ✅ |
 
 ---
@@ -394,7 +394,7 @@ MIT License
 **Last Updated:** 2026-01-09
 
 ### Recent Changes
-- **2026-01-09**: Added infographics/charts (bar, line, pie, gauge, KPI card)
+- **2026-01-09**: Added infographics/charts (bar, line, pie, progress bar, KPI card)
 - **2026-01-09**: Fixed SQL guardrails (comment stripping, REPLACE keyword)
 - **2026-01-09**: Fixed column classification (METRIC_TIME_PATTERNS)
 - **2026-01-06**: Added RBAC table-level access control

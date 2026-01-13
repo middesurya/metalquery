@@ -97,6 +97,57 @@
     margin-left: 4px;
 }
 
+/* Progress Bar Card */
+.progress-bar-card {
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.progress-bar-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+}
+
+.progress-bar-title {
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.progress-bar-value {
+    color: #f8fafc;
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1;
+}
+
+.progress-bar-unit {
+    font-size: 18px;
+    font-weight: 400;
+    color: #94a3b8;
+    margin-left: 4px;
+}
+
+.progress-bar-track {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+}
+
 /* KPI Card */
 .kpi-card {
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));
@@ -249,6 +300,14 @@
 
     .gauge-value {
         font-size: 28px;
+    }
+
+    .progress-bar-value {
+        font-size: 28px;
+    }
+
+    .progress-bar-card {
+        padding: 16px 20px;
     }
 
     .kpi-value {

@@ -480,7 +480,7 @@ The system includes a LIDA-inspired visualization pipeline that automatically ge
 │                                                                                  │
 │  • Applies heuristic rules to determine chart type                               │
 │  • Rule priority:                                                                │
-│    1. Single value → gauge (OEE/yield) or kpi_card (counts)                     │
+│    1. Single value → progress_bar (OEE/yield) or kpi_card (counts)              │
 │    2. Multi-metric row → metric_grid                                            │
 │    3. Time series data → line chart                                             │
 │    4. Trend keywords detected → line chart                                       │
@@ -509,7 +509,7 @@ The system includes a LIDA-inspired visualization pipeline that automatically ge
 | **Bar** | "compare", "versus", "by furnace", "by shift", "rank", "top", "which furnace" |
 | **Line** | "trend", "over time", "last week", "last month", "daily", "history" |
 | **Pie** | "breakdown", "distribution", "by reason", "by type", "proportion" |
-| **Gauge** | Single row with OEE/yield/efficiency/rate percentage |
+| **Progress Bar** | Single row with OEE/yield/efficiency/rate percentage |
 | **KPI Card** | Single row with count/total/quantity |
 
 ### Supported Chart Types
@@ -519,7 +519,7 @@ The system includes a LIDA-inspired visualization pipeline that automatically ge
 | `bar` | BarChart | Categorical comparisons (by furnace, by shift) |
 | `line` | LineChart | Time series and trends |
 | `pie` | PieChart | Distribution/breakdown (≤8 categories) |
-| `gauge` | Gauge | Single percentage metric (OEE, yield) |
+| `progress_bar` | Progress Bar | Single percentage metric (OEE, yield) |
 | `kpi_card` | Card | Single numeric value |
 | `metric_grid` | Grid | Multiple KPIs in one row |
 | `table` | Table | Complex data (>20 rows, fallback) |

@@ -40,7 +40,7 @@ class VizConfigGenerator:
         chart_type = goal.get("chart_type", "table")
 
         generators = {
-            "gauge": self._generate_gauge_config,
+            "progress_bar": self._generate_progress_bar_config,
             "kpi_card": self._generate_kpi_card_config,
             "line": self._generate_line_config,
             "area": self._generate_area_config,
@@ -150,8 +150,8 @@ class VizConfigGenerator:
             }
         }
 
-    def _generate_gauge_config(self, goal: Dict, results: List[Dict]) -> Dict:
-        """Generate gauge chart config."""
+    def _generate_progress_bar_config(self, goal: Dict, results: List[Dict]) -> Dict:
+        """Generate progress bar card config."""
         y_key = goal.get("y_axis") or self._find_y_axis(results)
         value = self._get_first_value(results, y_key)
 
@@ -159,17 +159,15 @@ class VizConfigGenerator:
         unit, max_val = self._detect_unit_and_max(y_key)
 
         return {
-            "type": "gauge",
+            "type": "progress_bar",
             "data": {"value": value, "max": max_val},
             "options": {
                 "title": goal.get("title", self._format_label(y_key)),
                 "unit": unit,
                 "thresholds": {
-                    "low": {"value": max_val * 0.5, "color": self.COLORS['danger']},
-                    "medium": {"value": max_val * 0.8, "color": self.COLORS['warning']},
-                    "high": {"value": max_val, "color": self.COLORS['success']}
-                },
-                "animation": True
+                    "low": 50,    # < 50% = red
+                    "medium": 80  # < 80% = amber, >= 80% = green
+                }
             }
         }
 
