@@ -36,13 +36,23 @@ CHART TYPE OPTIONS:
 7. "metric_grid" - Multiple metrics in grid (best for: dashboard with several KPIs)
 8. "table" - Raw data table (best for: detailed multi-column data, complex queries)
 
-DECISION RULES:
-- Single numeric value (1 row, 1-2 numeric columns) → "progress_bar" or "kpi_card"
-- Time series with dates → "line" or "area"
-- Comparing across categories (furnaces, shifts) → "bar"
-- Percentage breakdown or distribution → "pie"
-- Multiple KPIs in one row → "metric_grid"
-- More than 20 rows or complex data → "table"
+CRITICAL DECISION RULES (apply in order):
+1. Single numeric value (1 row, 1-2 numeric columns) → "progress_bar" or "kpi_card"
+2. Question contains "by [category]" (by furnace, by shift, by machine) → "bar" chart
+3. Question asks for "breakdown", "distribution", "proportion" → "pie" chart
+4. Multiple categories with numeric values (3-20 rows) → "bar" chart for comparison
+5. Time series with dates AND trend keywords → "line" or "area"
+6. More than 20 rows or complex multi-column data → "table"
+
+EXAMPLES:
+- "Show OEE by furnace" → bar chart (comparing furnaces)
+- "Production by shift" → bar chart (comparing shifts)
+- "Breakdown of defects by type" → pie chart (distribution)
+- "OEE trend over last month" → line chart (time series)
+- "Current OEE for furnace 1" → progress_bar (single percentage)
+- "Total production count" → kpi_card (single value)
+
+IMPORTANT: Prefer bar/pie charts over tables when data has clear categorical groupings!
 
 Return ONLY valid JSON (no markdown, no explanation):
 {{"chart_type": "<type>", "x_axis": "<column or null>", "y_axis": "<column or null>", "title": "<chart title>", "reasoning": "<brief reason>"}}"""
@@ -148,6 +158,7 @@ Return ONLY valid JSON (no markdown, no explanation):
         numeric_cols = data_summary.get('numeric_columns', [])
         categorical_cols = data_summary.get('categorical_columns', [])
         temporal_cols = data_summary.get('temporal_columns', [])
+        q_lower = question.lower()
 
         # Rule 1: Single value → progress_bar or kpi_card
         if data_summary.get('is_single_value'):
@@ -174,27 +185,27 @@ Return ONLY valid JSON (no markdown, no explanation):
                 "title": self._generate_title(question, None)
             }
 
-        # Rule 3: Time series → line chart
-        if data_summary.get('has_time_series') and temporal_cols and numeric_cols:
-            return {
-                "chart_type": "line",
-                "x_axis": temporal_cols[0],
-                "y_axis": numeric_cols[0],
-                "title": self._generate_title(question, numeric_cols[0])
-            }
+        # Rule 3: AGGRESSIVE "by X" detection → bar chart
+        # This catches queries like "OEE by furnace", "production by shift"
+        by_patterns = [
+            'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
+            'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
+            'by type', 'by category', 'by status', 'by grade', 'by reason',
+            'per furnace', 'per shift', 'per machine', 'each furnace', 'each shift',
+            'for each', 'across furnaces', 'across shifts', 'all furnaces', 'all shifts'
+        ]
+        if any(pattern in q_lower for pattern in by_patterns):
+            x_col = categorical_cols[0] if categorical_cols else None
+            y_col = numeric_cols[0] if numeric_cols else None
+            if x_col and y_col and row_count >= 2:
+                return {
+                    "chart_type": "bar",
+                    "x_axis": x_col,
+                    "y_axis": y_col,
+                    "title": self._generate_title(question, y_col)
+                }
 
-        # Rule 4: Trend detected → line chart
-        if data_summary.get('trend_detected') and numeric_cols:
-            x_col = temporal_cols[0] if temporal_cols else (categorical_cols[0] if categorical_cols else None)
-            return {
-                "chart_type": "line" if x_col else "bar",
-                "x_axis": x_col,
-                "y_axis": numeric_cols[0],
-                "title": self._generate_title(question, numeric_cols[0])
-            }
-
-        # Rule 5: Distribution explicitly requested → pie chart (check BEFORE bar comparison)
-        # Keywords like "breakdown", "distribution", "proportion" trigger pie charts
+        # Rule 4: Distribution explicitly requested → pie chart
         if data_summary.get('distribution_detected') and data_summary.get('is_distribution') and row_count <= 8:
             x_col = categorical_cols[0] if categorical_cols else None
             y_col = numeric_cols[0] if numeric_cols else None
@@ -206,11 +217,11 @@ Return ONLY valid JSON (no markdown, no explanation):
                     "title": self._generate_title(question, y_col)
                 }
 
-        # Rule 6: Comparison → bar chart
+        # Rule 5: Comparison detected → bar chart (BEFORE time series check)
         if data_summary.get('comparison_detected') or data_summary.get('is_comparison'):
             x_col = categorical_cols[0] if categorical_cols else None
             y_col = numeric_cols[0] if numeric_cols else None
-            if x_col and y_col:
+            if x_col and y_col and row_count >= 2:
                 return {
                     "chart_type": "bar",
                     "x_axis": x_col,
@@ -218,7 +229,27 @@ Return ONLY valid JSON (no markdown, no explanation):
                     "title": self._generate_title(question, y_col)
                 }
 
-        # Rule 7: Distribution with few categories → pie chart (fallback)
+        # Rule 6: Time series with EXPLICIT trend keywords → line chart
+        # Only use line chart if trend is explicitly mentioned
+        if data_summary.get('has_time_series') and data_summary.get('trend_detected') and temporal_cols and numeric_cols:
+            return {
+                "chart_type": "line",
+                "x_axis": temporal_cols[0],
+                "y_axis": numeric_cols[0],
+                "title": self._generate_title(question, numeric_cols[0])
+            }
+
+        # Rule 7: Categorical with values (3-20 rows) → bar chart
+        # This catches most comparison queries that weren't caught earlier
+        if categorical_cols and numeric_cols and 3 <= row_count <= 20:
+            return {
+                "chart_type": "bar",
+                "x_axis": categorical_cols[0],
+                "y_axis": numeric_cols[0],
+                "title": self._generate_title(question, numeric_cols[0])
+            }
+
+        # Rule 8: Distribution with few categories → pie chart (fallback)
         if data_summary.get('is_distribution') and row_count <= 8:
             x_col = categorical_cols[0] if categorical_cols else None
             y_col = numeric_cols[0] if numeric_cols else None
@@ -230,18 +261,9 @@ Return ONLY valid JSON (no markdown, no explanation):
                     "title": self._generate_title(question, y_col)
                 }
 
-        # Rule 7: Categorical with values → bar chart
-        if categorical_cols and numeric_cols and row_count <= 20:
-            return {
-                "chart_type": "bar",
-                "x_axis": categorical_cols[0],
-                "y_axis": numeric_cols[0],
-                "title": self._generate_title(question, numeric_cols[0])
-            }
-
-        # Rule 8: Small dataset with time aspect → line
-        if row_count <= 30 and numeric_cols:
-            x_col = temporal_cols[0] if temporal_cols else (categorical_cols[0] if categorical_cols else None)
+        # Rule 9: Small dataset with time aspect → line (only if no categories)
+        if row_count <= 30 and numeric_cols and not categorical_cols:
+            x_col = temporal_cols[0] if temporal_cols else None
             if x_col:
                 return {
                     "chart_type": "line",

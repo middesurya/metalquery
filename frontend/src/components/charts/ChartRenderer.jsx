@@ -61,6 +61,7 @@ const LineChartView = ({ config, data }) => {
                         dataKey={line.dataKey}
                         stroke={line.stroke || COLORS.palette[idx % COLORS.palette.length]}
                         strokeWidth={line.strokeWidth || 2}
+                        strokeOpacity={1}
                         dot={{ r: 4, fill: line.stroke || COLORS.palette[idx % COLORS.palette.length] }}
                         activeDot={{ r: 6 }}
                     />
@@ -96,6 +97,7 @@ const BarChartView = ({ config, data }) => {
                         key={idx}
                         dataKey={bar.dataKey}
                         fill={bar.fill || COLORS.palette[idx % COLORS.palette.length]}
+                        fillOpacity={1}
                         radius={[4, 4, 0, 0]}
                     />
                 ))}
@@ -146,8 +148,8 @@ const AreaChartView = ({ config, data }) => {
             <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <defs>
                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0} />
+                        <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.8} />
+                        <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0.3} />
                     </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />

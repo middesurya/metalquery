@@ -144,15 +144,22 @@ class DataSummarizer:
         comparison_words = [
             # Direct comparison
             'compare', 'versus', 'vs', 'between', 'difference',
-            # By entity patterns (from few-shot examples)
+            # By entity patterns (from few-shot examples) - EXPANDED
             'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
-            'by product', 'by material', 'by supplier', 'by equipment',
-            'each furnace', 'each shift', 'per furnace', 'per shift',
+            'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
+            'by type', 'by category', 'by status', 'by grade', 'by reason',
+            'each furnace', 'each shift', 'each machine', 'each product',
+            'per furnace', 'per shift', 'per machine', 'per product',
+            'for each furnace', 'for each shift', 'for each machine',
             # Ranking patterns
-            'rank', 'top 5', 'top 10', 'best', 'worst',
+            'rank', 'ranking', 'top 5', 'top 10', 'top', 'bottom', 'best', 'worst',
+            'highest', 'lowest', 'most', 'least',
             'which furnace', 'which shift', 'which machine', 'which product',
-            # Group comparison
-            'across', 'all furnaces', 'all shifts', 'statistics'
+            # Group comparison - EXPANDED
+            'across', 'all furnaces', 'all shifts', 'all machines', 'all products',
+            'statistics', 'summary by', 'grouped by', 'group by',
+            # Show/list patterns with categories
+            'show by', 'list by', 'display by', 'get by'
         ]
         return any(w in q for w in comparison_words)
 
@@ -164,12 +171,15 @@ class DataSummarizer:
         distribution_words = [
             # Distribution keywords
             'breakdown', 'distribution', 'proportion', 'percentage of',
-            'share', 'composition', 'split',
+            'share', 'composition', 'split', 'allocation',
             # By category patterns (for pie charts)
             'by type', 'by category', 'by reason', 'by cause',
-            'by status', 'by grade', 'by priority',
+            'by status', 'by grade', 'by priority', 'by classification',
             # Quality/status distribution
-            'grade distribution', 'status summary', 'quality distribution'
+            'grade distribution', 'status summary', 'quality distribution',
+            'defect breakdown', 'failure distribution',
+            # Percentage patterns
+            'what percent', 'how much of', 'portion of'
         ]
         return any(w in q for w in distribution_words)
 
