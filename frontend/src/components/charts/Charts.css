@@ -1,52 +1,56 @@
-/* Charts.css - DaVinci Design System Chart Styles */
+/* Charts.css - Clean Professional Chart Styles */
 
 /* Chart Container */
 .chart-container {
-    background: rgba(26, 39, 68, 0.6);
+    background: #ffffff;
     border-radius: 12px;
-    padding: 20px;
-    margin: 16px 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
+    padding: 24px;
+    margin: 20px 0;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
 }
 
 .chart-container:hover {
-    border-color: rgba(59, 130, 246, 0.3);
-    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
 }
 
 .chart-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #94a3b8;
-    margin-bottom: 16px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 20px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     text-align: center;
 }
 
 /* Custom Tooltip */
 .chart-tooltip {
-    background: rgba(26, 39, 68, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 8px;
     padding: 12px 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .chart-tooltip .tooltip-label {
-    color: #fff;
-    font-weight: 600;
+    color: #1e293b;
+    font-weight: 700;
     margin-bottom: 8px;
     font-size: 13px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
     padding-bottom: 6px;
+    letter-spacing: 0.5px;
 }
 
 .chart-tooltip p {
     margin: 4px 0;
     font-size: 12px;
+    font-weight: 500;
+    color: #475569;
 }
 
 /* Gauge Chart */
@@ -99,198 +103,215 @@
 
 /* Progress Bar Card */
 .progress-bar-card {
-    background: rgba(30, 41, 59, 0.8);
-    backdrop-filter: blur(10px);
+    background: #ffffff;
     border-radius: 12px;
-    padding: 20px 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 24px 28px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
 }
 
 .progress-bar-card:hover {
-    border-color: rgba(59, 130, 246, 0.3);
-    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
 }
 
 .progress-bar-title {
-    color: #94a3b8;
-    font-size: 14px;
-    font-weight: 500;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
 }
 
 .progress-bar-value {
-    color: #f8fafc;
-    font-size: 36px;
-    font-weight: 700;
-    margin-bottom: 16px;
+    color: #1e293b;
+    font-size: 42px;
+    font-weight: 800;
+    margin-bottom: 18px;
     line-height: 1;
 }
 
 .progress-bar-unit {
-    font-size: 18px;
-    font-weight: 400;
-    color: #94a3b8;
-    margin-left: 4px;
+    font-size: 20px;
+    font-weight: 500;
+    color: #64748b;
+    margin-left: 6px;
 }
 
 .progress-bar-track {
-    height: 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
+    height: 14px;
+    background: #f1f5f9;
+    border-radius: 8px;
     overflow: hidden;
+    border: 1px solid #e2e8f0;
 }
 
 .progress-bar-fill {
     height: 100%;
-    border-radius: 6px;
+    border-radius: 7px;
 }
 
 /* KPI Card */
 .kpi-card {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));
+    background: #ffffff;
     border-radius: 12px;
-    padding: 24px;
+    padding: 28px;
     text-align: center;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
 }
 
 .kpi-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-color: #cbd5e1;
 }
 
 .kpi-label {
     font-size: 12px;
-    color: #94a3b8;
+    color: #64748b;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
+    letter-spacing: 1.2px;
+    margin-bottom: 14px;
+    font-weight: 600;
 }
 
 .kpi-value-container {
     display: flex;
     align-items: baseline;
     justify-content: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 .kpi-value {
-    font-size: 42px;
-    font-weight: bold;
-    color: #fff;
+    font-size: 48px;
+    font-weight: 800;
+    color: #1e293b;
     line-height: 1;
 }
 
 .kpi-unit {
-    font-size: 18px;
-    color: #94a3b8;
+    font-size: 20px;
+    color: #64748b;
+    font-weight: 500;
 }
 
 .kpi-trend {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-top: 12px;
-    padding: 6px 14px;
-    border-radius: 20px;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 8px 18px;
+    border-radius: 24px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .kpi-trend.up {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
+    background: #dcfce7;
+    color: #16a34a;
+    border: 1px solid #86efac;
 }
 
 .kpi-trend.down {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
 }
 
 .kpi-trend.stable {
-    background: rgba(148, 163, 184, 0.2);
-    color: #94a3b8;
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
 }
 
 /* Metric Grid */
 .metric-grid {
     display: grid;
-    gap: 16px;
+    gap: 18px;
 }
 
 .metric-item {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    padding: 18px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
     text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
 }
 
 .metric-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
 }
 
 .metric-value {
-    font-size: 28px;
-    font-weight: bold;
-    color: #fff;
+    font-size: 32px;
+    font-weight: 800;
+    color: #1e293b;
     display: flex;
     align-items: baseline;
     justify-content: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 .metric-unit {
-    font-size: 14px;
-    color: #94a3b8;
-    font-weight: normal;
+    font-size: 16px;
+    color: #64748b;
+    font-weight: 500;
 }
 
 .metric-label {
     font-size: 11px;
     color: #64748b;
-    margin-top: 8px;
+    margin-top: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    font-weight: 600;
 }
 
 /* Recharts Overrides */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-    stroke: rgba(255, 255, 255, 0.08);
+    stroke: #e2e8f0;
 }
 
 .recharts-text {
-    fill: #94a3b8;
+    fill: #64748b;
     font-size: 12px;
+    font-weight: 500;
 }
 
 .recharts-legend-item-text {
-    color: #94a3b8 !important;
+    color: #475569 !important;
+    font-weight: 500;
 }
 
 .recharts-tooltip-wrapper {
     outline: none;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
 }
 
 .recharts-default-tooltip {
-    background: rgba(26, 39, 68, 0.95) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
-    padding: 12px !important;
+    padding: 12px 16px !important;
 }
 
 /* Responsive */
 @media (max-width: 600px) {
     .chart-container {
-        padding: 16px;
-        margin: 12px 0;
+        padding: 18px;
+        margin: 16px 0;
     }
 
     .gauge-container {
@@ -303,15 +324,15 @@
     }
 
     .progress-bar-value {
-        font-size: 28px;
+        font-size: 32px;
     }
 
     .progress-bar-card {
-        padding: 16px 20px;
+        padding: 20px 24px;
     }
 
     .kpi-value {
-        font-size: 32px;
+        font-size: 36px;
     }
 
     .metric-grid {
@@ -319,22 +340,91 @@
     }
 
     .metric-value {
-        font-size: 22px;
+        font-size: 24px;
     }
 }
 
-/* Animation */
+/* Animations */
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(15px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
     }
 }
 
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+@keyframes glow {
+
+    0%,
+    100% {
+        box-shadow:
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    50% {
+        box-shadow:
+            0 8px 32px rgba(99, 102, 241, 0.3),
+            0 0 40px rgba(99, 102, 241, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+}
+
 .chart-container {
-    animation: fadeInUp 0.4s ease-out;
+    animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading State */
+.chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    color: #cbd5e1;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.chart-loading::after {
+    content: '';
+    width: 40px;
+    height: 40px;
+    margin-left: 12px;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Error State */
+.chart-error {
+    padding: 24px;
+    text-align: center;
+    color: #f87171;
+    font-size: 14px;
+    font-weight: 500;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    margin: 16px 0;
 }
