@@ -235,7 +235,7 @@ TABLE_SCHEMA = {
         "value_column": "cast_weight",
         "aggregation": "SUM",
         "date_column": "tap_production_datetime",
-        "keywords": ["tap", "production", "cast", "weight", "tapping"]
+        "keywords": ["tap", "cast", "weight", "tapping", "tap production"]
     },
     "core_process_tap_process": {
         "description": "Tap process status and progress",
@@ -407,6 +407,18 @@ CRITICAL SQL RULES FOR AGGREGATION:
 │   └─ Example: ORDER BY furnace_no or ORDER BY SUM(downtime_hours) DESC
 ├─ If NOT using aggregate functions:
 │   └─ ORDER BY can use any column (e.g., ORDER BY date DESC)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+COLUMN SELECTION RULES:
+1. SELECT ONLY columns necessary to answer the question.
+2. DO NOT include `record_id`, `id`, `created_at`, `modified_at` unless explicitly requested.
+3. DO NOT use `SELECT *` or select all available columns "just in case".
+4. Example: "Show defect rate" → `SELECT date, defect_rate FROM ...` (NOT `SELECT record_id, shift_id, ...`)
+
+AMBIGUITY RESOLUTION:
+1. "Production" / "Output" → Use `kpi_quantity_produced_data`
+2. "Tap Production" / "Cast Weight" / "Ladle" → Use `core_process_tap_production`
 
 ════════════════════════════════════════════════════════════════════════════════════
 
@@ -1408,6 +1420,13 @@ def build_prompt_with_schema(
         else:
             agg_hint = f"Use {user_aggregation}() for aggregation"
 
+        # Get live columns from schema_dict if available
+        display_columns = info['columns']
+        if schema_dict and best_table in schema_dict:
+            live_table = schema_dict[best_table]
+            if hasattr(live_table, 'columns'):
+                display_columns = [c.name for c in live_table.columns]
+
         table_hint = f"""
 HINT FOR THIS QUERY:
 ─ Best matching table: {best_table}
@@ -1415,8 +1434,8 @@ HINT FOR THIS QUERY:
 ─ Value column: {info.get('value_column', 'N/A')}
 ─ Aggregation: {agg_hint}
 ─ Date column: {info.get('date_column', 'date')}
-─ Columns available: {', '.join(info['columns'][:10])}...
-─ Filter by 'furnace_no' for furnace-specific data
+─ Columns available: {', '.join(display_columns[:15])}...
+─ Filter by 'furnace_no' (INTEGER) - DO NOT use '_id' suffix unless explicitly in columns
 ─ IMPORTANT: User-requested aggregation OVERRIDES table default!
 """
 
@@ -1436,7 +1455,14 @@ HINT FOR THIS QUERY:
     top_tables = table_scores[:5]
     
     for table_name, info, score in top_tables:
-        cols = ", ".join(info["columns"][:8])
+        # Get live columns from schema_dict if available
+        cols_list = info["columns"]
+        if schema_dict and table_name in schema_dict:
+            live_table = schema_dict[table_name]
+            if hasattr(live_table, 'columns'):
+                cols_list = [c.name for c in live_table.columns]
+                
+        cols = ", ".join(cols_list[:12])
         schema_text += f"  • {table_name}: {cols}...\n"
     
     # Build few-shot examples (use more examples for better learning)

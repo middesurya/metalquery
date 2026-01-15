@@ -67,9 +67,22 @@ class SQLDiagnostic:
             return []
         
         table_info = self.schema[table_name]
+        if hasattr(table_info, 'columns'):
+            # Handle TableInfo object (dataclass) or dict-like object
+            columns = table_info.columns
+            if isinstance(columns, list):
+                if columns and hasattr(columns[0], 'name'):
+                    return [c.name.lower() for c in columns]
+                return [str(c).lower() for c in columns]
+            elif isinstance(columns, dict):
+                return [c.lower() for c in columns.keys()]
+                
         if isinstance(table_info, dict):
             if 'columns' in table_info:
-                return [c.lower() for c in table_info['columns'].keys()]
+                cols = table_info['columns']
+                if isinstance(cols, dict):
+                    return [c.lower() for c in cols.keys()]
+                return [c.lower() for c in cols]
             return [k.lower() for k in table_info.keys()]
         elif isinstance(table_info, list):
             return [c.lower() for c in table_info]
@@ -125,6 +138,8 @@ class SQLDiagnostic:
                         # Check for common issues
                         if col == 'furnace_id':
                             errors.append("Use 'furnace_no' instead of 'furnace_id'")
+                        elif col == 'furnace_no_id':
+                            errors.append("Use 'furnace_no' instead of 'furnace_no_id'")
                         elif col == 'plant_id' and "'6v'" in sql.lower():
                             errors.append("plant_id is INTEGER, not string '6v'")
                         else:
@@ -135,6 +150,8 @@ class SQLDiagnostic:
         # Check for common issues
         if 'furnace_id =' in sql.lower():
             warnings.append("Consider using 'furnace_no' for filtering")
+        if 'furnace_no_id =' in sql.lower():
+            errors.append("Use 'furnace_no' instead of 'furnace_no_id'")
         
         if '```' in sql:
             errors.append('SQL contains markdown formatting')
@@ -153,6 +170,7 @@ class SQLDiagnostic:
         """Suggest a fix for common errors."""
         fixes = {
             'furnace_id': sql.replace('furnace_id', 'furnace_no'),
+            'furnace_no_id': sql.replace('furnace_no_id', 'furnace_no'),
             'markdown': re.sub(r'```(?:sql)?', '', sql).strip(),
         }
         return fixes.get(error_type, sql)

@@ -691,7 +691,7 @@ def get_local_schema():
             try:
                 # Basic field info
                 field_info = {
-                    "name": field.name,
+                    "name": field.column if hasattr(field, 'column') else field.name,
                     "type": field.get_internal_type(),
                 }
 
