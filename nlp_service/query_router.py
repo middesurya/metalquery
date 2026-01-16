@@ -187,11 +187,13 @@ class QueryRouter:
         "log book", "logbook",
         "tap hole log", "tap hole",
         "furnace bed", "bed log", "furnace bed log",
-        "furnace downtime", "downtime log", "furnace downtime log",
-        
+        # Removed "furnace downtime" - conflicts with KPI data queries
+        "downtime log", "furnace downtime log",
+
         # BRD S013 - EHS
         "incident reporting", "incident report",
-        "safety", "safety reporting",
+        # Removed "safety" - conflicts with KPI data queries (safety incidents)
+        "safety reporting",
         "environment health", "environment health safety",
     }
     
@@ -235,7 +237,24 @@ class QueryRouter:
                 if metric in question_lower:
                     logger.info(f"Routing to SQL: 'what is' + KPI metric '{metric}' detected")
                     return "sql", 0.90
-        
+
+        # ✅ PRIORITY CHECK 3: "show/display X by furnace/shift/date" → SQL
+        # These are data aggregation queries, not documentation
+        if re.search(r'(show|display|list|get) .+ (by|per) (furnace|shift|date|day|month|week)', question_lower):
+            logger.info(f"Routing to SQL: 'show X by furnace/shift/date' pattern detected")
+            return "sql", 0.92
+
+        # ✅ PRIORITY CHECK 4: KPI data queries with aggregation words → SQL
+        # Examples: "show downtime by furnace", "display taps by furnace"
+        kpi_data_patterns = [
+            r'(show|display|get|list) (total|average|sum|count)?\s*(downtime|oee|yield|energy|production|taps?|incidents)',
+            r'(downtime|safety incidents|energy|yield|oee|production|taps?) (by|per) (furnace|shift)',
+        ]
+        for pattern in kpi_data_patterns:
+            if re.search(pattern, question_lower):
+                logger.info(f"Routing to SQL: KPI data query pattern detected")
+                return "sql", 0.91
+
         sql_score = 0
         brd_score = 0
         
