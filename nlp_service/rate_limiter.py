@@ -92,29 +92,42 @@ class GroqRateLimiter:
         
         requests_used, tokens_used = self.get_current_usage()
         
-        # Check request limit
+        # Check request limit - smarter wait time calculation
         if requests_used >= self.config.requests_per_minute:
             self.blocked_requests += 1
             if self.request_window:
-                wait_time = 60 - (time.time() - self.request_window[0][0])
+                # Calculate minimum wait time: when will the NEXT slot be available?
+                # Instead of waiting for the oldest request to expire, wait for enough requests to clear
+                needed_slots = requests_used - self.config.requests_per_minute + 1
+                wait_time = max(1, 60 - (time.time() - self.request_window[needed_slots - 1][0]))
             else:
-                wait_time = 60  # Shouldn't happen, but safe fallback
+                wait_time = 1  # Minimum wait
             logger.warning(f"⚠️ Rate limit: {requests_used}/{self.config.requests_per_minute} requests. Wait {wait_time:.1f}s")
             return False, f"Rate limit exceeded. Please wait {wait_time:.0f} seconds."
 
-        # Check token limit
+        # Check token limit - smarter wait time calculation
         if tokens_used + estimated_tokens > self.config.tokens_per_minute:
             if self.token_window:
-                # There are existing requests - need to wait for window to clear
+                # Calculate minimum wait time: when will enough tokens free up?
+                # Find the earliest point where tokens_used < limit
+                needed_tokens = tokens_used + estimated_tokens - self.config.tokens_per_minute
+                cumulative = 0
+                wait_time = 1  # Minimum wait
+
+                for i, (timestamp, token_count) in enumerate(self.token_window):
+                    cumulative += token_count
+                    if cumulative >= needed_tokens:
+                        wait_time = max(1, 60 - (time.time() - timestamp))
+                        break
+
                 self.blocked_requests += 1
-                wait_time = 60 - (time.time() - self.token_window[0][0])
                 logger.warning(f"⚠️ Token limit: {tokens_used}/{self.config.tokens_per_minute} tokens. Wait {wait_time:.1f}s")
                 return False, f"Token limit exceeded. Please wait {wait_time:.0f} seconds."
             else:
                 # Window is empty - allow first request even if large, with warning
                 if estimated_tokens > self.config.tokens_per_minute:
                     logger.warning(f"⚠️ Large request: {estimated_tokens} tokens exceeds {self.config.tokens_per_minute}/min limit, but allowing (window empty)")
-        
+
         return True, "OK"
     
     def record_request(self, input_tokens: int, output_tokens: int = 0):
@@ -161,8 +174,8 @@ def get_rate_limiter() -> GroqRateLimiter:
     return _rate_limiter
 
 
-def check_rate_limit(estimated_tokens: int = 500) -> Tuple[bool, str]:
-    """Quick check if request can proceed."""
+def check_rate_limit(estimated_tokens: int = 300) -> Tuple[bool, str]:
+    """Quick check if request can proceed. Default 300 tokens for typical query."""
     return get_rate_limiter().can_make_request(estimated_tokens)
 
 
