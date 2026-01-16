@@ -67,7 +67,8 @@ class QueryRouter:
         "records where", "incidents", "exceptions", "alert", "warning",
         
         # Core Process tables
-        "tap", "cast weight", "tapping", "grading", "grade",
+        "tap", "taps", "tap production", "tap count", "tap data",
+        "cast weight", "tapping", "grading", "grade",
         
         # Chatbot-feel queries that map to SQL
         "investigate", "spending", "area", "changed", "caused",
@@ -114,7 +115,7 @@ class QueryRouter:
         
         # BRD S05 - Core Process
         "core process", "core process production", "production process", "process flow",
-        "tapping", "cast", "electrode",
+        "tapping process", "cast process", "electrode process",
         
         # BRD S06 - Reports (structure, not data)
         "report format", "report structure", "report fields", "reports",
@@ -181,11 +182,14 @@ class QueryRouter:
         
         # BRD S08 - Lab Analysis
         "lab analysis", "laboratory", "laboratory analysis",
-        "spout analysis", "tap analysis",
+        "spout analysis",
+        # Removed "tap analysis" - conflicts with tap production data queries
+        "tap analysis report",
         
         # BRD S09 - Log Book
         "log book", "logbook",
-        "tap hole log", "tap hole",
+        "tap hole log",
+        # Removed standalone "tap hole" - too generic, conflicts with tap data queries
         "furnace bed", "bed log", "furnace bed log",
         # Removed "furnace downtime" - conflicts with KPI data queries
         "downtime log", "furnace downtime log",
