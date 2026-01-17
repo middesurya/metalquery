@@ -416,6 +416,13 @@ COLUMN SELECTION RULES:
 3. DO NOT use `SELECT *` or select all available columns "just in case".
 4. Example: "Show defect rate" → `SELECT date, defect_rate FROM ...` (NOT `SELECT record_id, shift_id, ...`)
 
+⚠️ SQL OUTPUT FORMAT (CRITICAL):
+1. Return ONLY executable SQL - NO comments (--), NO placeholders (YOUR_VALUE), NO explanations
+2. NEVER include SQL comments like "-- change this" or "-- optional"
+3. If a filter value is unknown, OMIT the WHERE clause entirely rather than using placeholders
+4. Example - WRONG: WHERE furnace_no = 1 -- change as needed
+5. Example - CORRECT: WHERE furnace_no = 1
+
 VISUALIZATION-READY QUERIES (CRITICAL FOR CHARTING):
 1. ALWAYS include the date/time column for time-series KPI data - charts need an X-axis
 2. For "list", "show", "display" queries: SELECT date, {value_column} FROM ... ORDER BY date
@@ -1512,7 +1519,7 @@ EXAMPLES (Learn from these patterns):
 
 User Question: {question}
 
-SQL Query (ONLY valid PostgreSQL, no explanations):"""
+SQL Query (ONLY valid PostgreSQL, no comments, no explanations - raw executable SQL only):"""
 
 
 # Alias for v3.0 API compatibility
