@@ -606,6 +606,16 @@ FEW_SHOT_EXAMPLES = [
     {"q": "List recent quality issues", "sql": "SELECT date, furnace_no, defect_rate FROM kpi_defect_rate_data ORDER BY date DESC LIMIT 100"},
 
     # ═══════════════════════════════════════════════════════════════════
+    # TYPE 2B: FILTERED LIST QUERIES - ALWAYS INCLUDE DATE FOR CHARTS
+    # ═══════════════════════════════════════════════════════════════════
+    {"q": "List OEE for machine CAST_BAY", "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'CAST_BAY' ORDER BY date DESC LIMIT 100"},
+    {"q": "Show OEE for machine FURNACE_1", "sql": "SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'FURNACE_1' ORDER BY date DESC LIMIT 100"},
+    {"q": "Display downtime for machine M001", "sql": "SELECT date, downtime_hours FROM kpi_downtime_data WHERE machine_id = 'M001' ORDER BY date DESC LIMIT 100"},
+    {"q": "Get yield data for product P123", "sql": "SELECT date, yield_percentage FROM kpi_yield_data WHERE product_type_id = 'P123' ORDER BY date DESC LIMIT 100"},
+    {"q": "Show energy used for plant 1", "sql": "SELECT date, energy_used FROM kpi_energy_used_data WHERE plant_id = 1 ORDER BY date DESC LIMIT 100"},
+    {"q": "List cycle time for shift 4", "sql": "SELECT date, cycle_time FROM kpi_cycle_time_data WHERE shift_id = '4' ORDER BY date DESC LIMIT 100"},
+
+    # ═══════════════════════════════════════════════════════════════════
     # TYPE 3: COMPARATIVE ANALYSIS (10)
     # ═══════════════════════════════════════════════════════════════════
     {"q": "Compare OEE between Furnace 1 and 2", "sql": "SELECT furnace_no, AVG(oee_percentage) as avg_oee FROM kpi_overall_equipment_efficiency_data WHERE furnace_no IN (1, 2) GROUP BY furnace_no ORDER BY avg_oee DESC"},
