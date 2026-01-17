@@ -571,9 +571,12 @@ def chat(request):
                 chart_data = chart_response.json()
                 if chart_data.get('success') and chart_data.get('chart_config'):
                     chart_config = chart_data['chart_config']
-                    # Inject data into chart config
-                    chart_config['data'] = serializable_results
-                    logger.info(f"Chart config generated: type={chart_config.get('type')}")
+                    # Only inject raw data for array-based charts (line, bar, pie, area)
+                    # KPI cards and progress bars have their own pre-formatted data structure
+                    chart_type = chart_config.get('type')
+                    if chart_type not in ('kpi_card', 'progress_bar', 'metric_grid'):
+                        chart_config['data'] = serializable_results
+                    logger.info(f"Chart config generated: type={chart_type}")
             except Exception as e:
                 logger.warning(f"Chart config generation failed: {e}")
 
