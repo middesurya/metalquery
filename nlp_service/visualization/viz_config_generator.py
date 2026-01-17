@@ -171,8 +171,53 @@ class VizConfigGenerator:
             }
         }
 
+    # Identifier columns that should not have units
+    IDENTIFIER_PATTERNS = ['furnace_no', 'machine_id', 'plant_id', 'shift_id', 'workshop', 'equipment']
+
     def _generate_kpi_card_config(self, goal: Dict, results: List[Dict]) -> Dict:
         """Generate KPI card config."""
+        if not results or not results[0]:
+            return self._generate_table_config(goal, results)
+
+        # For "which X" questions with identifier + metric columns,
+        # show the identifier as main value and metric as subtitle
+        columns = list(results[0].keys())
+        identifier_col = None
+        metric_col = None
+
+        # Find identifier and metric columns
+        for col in columns:
+            if any(p in col.lower() for p in self.IDENTIFIER_PATTERNS):
+                identifier_col = col
+            elif isinstance(results[0].get(col), (int, float)):
+                if not identifier_col or col != identifier_col:
+                    metric_col = col
+
+        # If we have both identifier and metric, format appropriately
+        if identifier_col and metric_col:
+            identifier_value = results[0].get(identifier_col)
+            metric_value = results[0].get(metric_col)
+            metric_unit, _ = self._detect_unit_and_max(metric_col)
+
+            # Format identifier label (e.g., "Furnace 1" instead of just "1")
+            id_label = self._format_identifier(identifier_col, identifier_value)
+
+            return {
+                "type": "kpi_card",
+                "data": {
+                    "value": id_label,
+                    "subtitle": f"{round(metric_value, 2) if isinstance(metric_value, float) else metric_value} {metric_unit}".strip(),
+                    "previous": None
+                },
+                "options": {
+                    "title": goal.get("title", self._format_label(metric_col)),
+                    "unit": "",  # No unit for identifier
+                    "trend": None,
+                    "color": self.COLORS['primary']
+                }
+            }
+
+        # Default: use metric column
         y_key = goal.get("y_axis") or self._find_y_axis(results)
         value = self._get_first_value(results, y_key)
         unit, _ = self._detect_unit_and_max(y_key)
@@ -187,6 +232,20 @@ class VizConfigGenerator:
                 "color": self.COLORS['primary']
             }
         }
+
+    def _format_identifier(self, col_name: str, value: Any) -> str:
+        """Format identifier value with label (e.g., 'Furnace 1')."""
+        if 'furnace' in col_name.lower():
+            return f"Furnace {value}"
+        if 'machine' in col_name.lower():
+            return f"Machine {value}"
+        if 'plant' in col_name.lower():
+            return f"Plant {value}"
+        if 'shift' in col_name.lower():
+            return f"Shift {value}"
+        if 'workshop' in col_name.lower():
+            return f"Workshop {value}"
+        return str(value)
 
     def _generate_metric_grid_config(self, goal: Dict, results: List[Dict]) -> Dict:
         """Generate metric grid config. Aggregates multiple rows if present."""
