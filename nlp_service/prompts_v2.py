@@ -416,6 +416,13 @@ COLUMN SELECTION RULES:
 3. DO NOT use `SELECT *` or select all available columns "just in case".
 4. Example: "Show defect rate" → `SELECT date, defect_rate FROM ...` (NOT `SELECT record_id, shift_id, ...`)
 
+VISUALIZATION-READY QUERIES (CRITICAL FOR CHARTING):
+1. ALWAYS include the date/time column for time-series KPI data - charts need an X-axis
+2. For "list", "show", "display" queries: SELECT date, {value_column} FROM ... ORDER BY date
+3. For filtered queries (e.g., "OEE for machine X"): Include date to show trend over time
+4. Single numeric columns WITHOUT date/category CANNOT be visualized as charts
+5. Example: "List OEE for machine CAST_BAY" → SELECT date, oee_percentage FROM ... WHERE machine_id = 'CAST_BAY' ORDER BY date
+
 AMBIGUITY RESOLUTION:
 1. "Production" / "Output" → Use `kpi_quantity_produced_data`
 2. "Tap Production" / "Cast Weight" / "Ladle" → Use `core_process_tap_production`

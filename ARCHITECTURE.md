@@ -453,54 +453,176 @@ npm start
 
 ---
 
-## Infographics Pipeline
+## Infographics Pipeline (LIDA-Inspired)
 
-The system includes a LIDA-inspired visualization pipeline that automatically generates chart configurations based on query results.
+The system includes a **4-stage visualization pipeline** inspired by Microsoft's LIDA framework. It automatically analyzes query results and generates the optimal chart type without user intervention.
+
+### The Big Picture
+
+```
+User Question → SQL Query → Raw Data → 🎨 Viz Pipeline → Beautiful Chart
+                                              │
+                                    "What chart fits this data best?"
+```
+
+### 4-Stage Pipeline Architecture
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  STAGE 1    │ → │  STAGE 2    │ → │  STAGE 3    │ → │  STAGE 4    │
+│ Summarizer  │    │ Goal Finder │    │  Config     │    │ Validator   │
+│             │    │             │    │ Generator   │    │             │
+│ "What kind  │    │ "What chart │    │ "Build the  │    │ "Is it safe │
+│  of data?"  │    │  to use?"   │    │  recipe"    │    │  & correct?"│
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+---
+
+### Stage 1: Data Summarizer (`viz_summarizer.py`)
+
+Analyzes SQL results to understand data characteristics.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        INFOGRAPHICS GENERATION FLOW                              │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-  SQL Results (from Django)
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│  DataSummarizer (viz_summarizer.py)                                              │
+│  INPUT: SQL Results                                                              │
+│  [{"furnace_id": "F1", "oee": 82.5}, {"furnace_id": "F2", "oee": 76.3}]         │
 │                                                                                  │
-│  • Classifies columns: numeric vs categorical vs temporal                        │
-│  • Detects query patterns: comparison, distribution, trend                       │
-│  • Uses METRIC_TIME_PATTERNS to prevent misclassification                        │
-│    (e.g., cycle_time is numeric, not temporal)                                  │
+│  OUTPUT: Data Summary                                                            │
+│  {                                                                               │
+│    "row_count": 2,                                                               │
+│    "numeric_columns": ["oee"],           # Numbers (Y-axis candidates)          │
+│    "categorical_columns": ["furnace_id"], # Labels (X-axis candidates)          │
+│    "temporal_columns": [],                # Dates (time series)                 │
+│    "is_comparison": true,                 # Multiple categories detected        │
+│    "is_time_series": false                # No date column                      │
+│  }                                                                               │
 └─────────────────────────────────────────────────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│  VizGoalFinder (viz_goal_finder.py)                                              │
-│                                                                                  │
-│  • Applies heuristic rules to determine chart type                               │
-│  • Rule priority:                                                                │
-│    1. Single value → progress_bar (OEE/yield) or kpi_card (counts)              │
-│    2. Multi-metric row → metric_grid                                            │
-│    3. Time series data → line chart                                             │
-│    4. Trend keywords detected → line chart                                       │
-│    5. Distribution keywords → pie chart                                          │
-│    6. Comparison keywords → bar chart                                            │
-│    7. Default → table                                                            │
-└─────────────────────────────────────────────────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│  VizConfigGenerator (viz_config_generator.py)                                    │
-│                                                                                  │
-│  • Generates Recharts-compatible JSON config                                     │
-│  • Applies DaVinci design system colors                                          │
-│  • Formats labels and units (OEE→%, kWh, hours)                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
-        │
-        ▼
-  Chart Config JSON → Frontend ChartRenderer
 ```
+
+**Key Feature:** Distinguishes metric columns from temporal columns:
+- `cycle_time`, `downtime`, `mtbf_hours` → **Numeric** (not temporal)
+- `date`, `timestamp`, `shift_date` → **Temporal**
+
+---
+
+### Stage 2: Goal Finder (`viz_goal_finder.py`)
+
+Determines the best chart type using pattern matching and heuristic rules.
+
+**Decision Tree:**
+
+```
+                    ┌─────────────────────┐
+                    │ Does query have     │
+                    │ "by X" pattern?     │
+                    │ (by furnace, etc.)  │
+                    └─────────┬───────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │ YES                           │ NO
+              ▼                               ▼
+        ┌──────────┐                ┌─────────────────┐
+        │ BAR CHART│                │ Single value?   │
+        └──────────┘                └────────┬────────┘
+                                             │
+                              ┌──────────────┴──────────────┐
+                              │ YES                         │ NO
+                              ▼                             ▼
+                        ┌────────────┐            ┌─────────────────┐
+                        │ PROGRESS   │            │ Time series?    │
+                        │ BAR / KPI  │            └────────┬────────┘
+                        └────────────┘                     │
+                                           ┌───────────────┴───────────────┐
+                                           │ YES                           │ NO
+                                           ▼                               ▼
+                                     ┌────────────┐              ┌─────────────────┐
+                                     │ LINE CHART │              │ Distribution?   │
+                                     └────────────┘              └────────┬────────┘
+                                                                         │
+                                                         ┌───────────────┴───────┐
+                                                         │ YES                   │ NO
+                                                         ▼                       ▼
+                                                   ┌────────────┐         ┌────────────┐
+                                                   │ PIE CHART  │         │ BAR CHART  │
+                                                   └────────────┘         │ (default)  │
+                                                                          └────────────┘
+```
+
+**Pattern Matching Examples:**
+
+| User Query | Pattern Detected | Chart Selected |
+|------------|------------------|----------------|
+| "Show OEE **by furnace**" | `by X` pattern | 📊 Bar Chart |
+| "What is current OEE?" | Single value | 📈 Progress Bar |
+| "OEE **trend** this month" | Time + trend | 📉 Line Chart |
+| "**Breakdown** of defects" | Distribution | 🥧 Pie Chart |
+| "**Compare** furnace performance" | Comparison | 📊 Bar Chart |
+
+---
+
+### Stage 3: Config Generator (`viz_config_generator.py`)
+
+Creates Recharts-compatible JSON configuration.
+
+**Example Output:**
+
+```json
+{
+    "type": "bar",
+    "data": [
+        {"furnace_id": "F1", "oee": 82.5},
+        {"furnace_id": "F2", "oee": 76.3}
+    ],
+    "options": {
+        "xAxis": {"dataKey": "furnace_id", "label": "Furnace"},
+        "yAxis": {"domain": [0, 100]},
+        "bars": [{
+            "dataKey": "oee",
+            "fill": "#3b82f6",
+            "name": "OEE %"
+        }],
+        "title": "OEE by Furnace"
+    }
+}
+```
+
+**Color Palette (DaVinci Design System):**
+
+```
+┌────────────────────────────────────────────────────┐
+│  Primary    Secondary   Success   Warning   Danger │
+│  #3b82f6    #f97316    #22c55e   #f59e0b   #ef4444│
+│  🔵 Blue    🟠 Orange   🟢 Green  🟡 Amber  🔴 Red  │
+└────────────────────────────────────────────────────┘
+```
+
+**Unit Detection:**
+
+| Column Pattern | Unit | Max Value |
+|---------------|------|-----------|
+| `oee`, `yield`, `percentage` | % | 100 |
+| `mtbf`, `mttr`, `hours` | hrs | 24 |
+| `energy`, `kwh` | kWh | 10000 |
+| `temperature`, `temp` | °C | 2000 |
+
+---
+
+### Stage 4: Validator (`viz_validator.py`)
+
+Ensures config is safe and correct before rendering.
+
+**Security Checks:**
+- Blocks dangerous patterns: `onclick`, `<script>`, `javascript:`
+- Blocks code execution attempts and prototype pollution
+- Validates data structure and size limits
+
+**Size Limits:**
+- Max data points: 1,000
+- Max string length: 500 chars
+- Max recursion depth: 10 levels
+
+---
 
 ### Chart Type Detection Keywords
 
@@ -524,6 +646,19 @@ The system includes a LIDA-inspired visualization pipeline that automatically ge
 | `metric_grid` | Grid | Multiple KPIs in one row |
 | `table` | Table | Complex data (>20 rows, fallback) |
 
+### Manufacturing KPI Templates
+
+Pre-configured templates for common manufacturing metrics:
+
+| KPI | Default Chart | Thresholds |
+|-----|--------------|------------|
+| OEE | Progress Bar | <50% 🔴, <80% 🟡, ≥80% 🟢 |
+| Yield | Progress Bar | <70% 🔴, <90% 🟡, ≥90% 🟢 |
+| Downtime | Bar Chart | - |
+| MTBF | KPI Card | - |
+| Energy | Line Chart | - |
+| Defects | Pie Chart | - |
+
 ---
 
 ## Summary
@@ -540,4 +675,4 @@ The system includes a LIDA-inspired visualization pipeline that automatically ge
 
 ---
 
-**Last Updated:** 2026-01-09
+**Last Updated:** 2026-01-16

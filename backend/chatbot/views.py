@@ -542,7 +542,7 @@ def chat(request):
                 json={
                     'question': question,
                     'sql': sql,
-                    'results': results,
+                    'results': convert_for_json(results),
                 },
                 timeout=300
             )
@@ -591,7 +591,7 @@ def chat(request):
             'query_type': 'sql',
             'response': natural_response,
             'sql': sql,
-            'results': results[:MAX_TABLE_RESULTS],
+            'results': convert_for_json(results[:MAX_TABLE_RESULTS]),
             'row_count': row_count,
             'chart_config': chart_config,
             'confidence_score': nlp_data.get('confidence_score'),
