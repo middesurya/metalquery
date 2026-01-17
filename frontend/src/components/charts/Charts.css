@@ -200,6 +200,17 @@
     font-weight: 500;
 }
 
+.kpi-subtitle {
+    font-size: 16px;
+    color: #64748b;
+    margin-top: 12px;
+    font-weight: 500;
+    background: #f1f5f9;
+    padding: 8px 16px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
 .kpi-trend {
     display: inline-flex;
     align-items: center;

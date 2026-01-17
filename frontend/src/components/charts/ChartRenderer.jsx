@@ -220,6 +220,7 @@ const KPICard = ({ config, data }) => {
     const value = typeof rawValue === 'number' ? rawValue : (Number(rawValue) || rawValue || 0);
     const unit = options.unit || '';
     const title = options.title || 'Metric';
+    const subtitle = config.data?.subtitle || null;  // NEW: Support subtitle for "which X" answers
     const trend = options.trend ? Number(options.trend) : null;
     const color = options.color || COLORS.primary;
 
@@ -230,6 +231,9 @@ const KPICard = ({ config, data }) => {
                 <span className="kpi-value">{typeof value === 'number' ? value.toLocaleString() : value}</span>
                 <span className="kpi-unit">{unit}</span>
             </div>
+            {subtitle && (
+                <div className="kpi-subtitle">{subtitle}</div>
+            )}
             {trend && (
                 <div className={`kpi-trend ${trend > 0 ? 'up' : trend < 0 ? 'down' : 'stable'}`}>
                     {trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} {Math.abs(trend)}%
