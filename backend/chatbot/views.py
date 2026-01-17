@@ -40,19 +40,14 @@ MAX_TABLE_RESULTS = 100      # Maximum rows returned to frontend
 
 
 def convert_for_json(data: Any) -> Any:
-    """
-    Recursively convert non-JSON-serializable values for JSON serialization.
-    Handles: Decimal, date, datetime objects.
-    """
+    """Recursively convert non-JSON-serializable values (Decimal, date, datetime)."""
     if isinstance(data, list):
         return [convert_for_json(item) for item in data]
-    elif isinstance(data, dict):
+    if isinstance(data, dict):
         return {key: convert_for_json(value) for key, value in data.items()}
-    elif isinstance(data, Decimal):
+    if isinstance(data, Decimal):
         return float(data)
-    elif isinstance(data, datetime):
-        return data.isoformat()
-    elif isinstance(data, date):
+    if isinstance(data, (datetime, date)):
         return data.isoformat()
     return data
 
@@ -62,44 +57,31 @@ def convert_for_json(data: Any) -> Any:
 # ============================================================
 
 class RateLimiter:
-    """Simple in-memory rate limiter."""
+    """Simple in-memory rate limiter using sliding window."""
 
     def __init__(self, requests_per_minute: int = 30):
         self.requests_per_minute = requests_per_minute
-        self.requests = {}  # IP -> list of timestamps
+        self.requests = {}
 
-    def is_allowed(self, client_ip: str) -> bool:
-        """Check if request is allowed."""
-        now = time.time()
-        minute_ago = now - 60
-
-        # Get existing requests for this IP
+    def _get_recent_requests(self, client_ip: str) -> list:
+        """Get requests from the last minute for an IP."""
+        cutoff = time.time() - 60
         if client_ip not in self.requests:
             self.requests[client_ip] = []
+        self.requests[client_ip] = [ts for ts in self.requests[client_ip] if ts > cutoff]
+        return self.requests[client_ip]
 
-        # Clean old requests
-        self.requests[client_ip] = [
-            ts for ts in self.requests[client_ip] if ts > minute_ago
-        ]
-
-        # Check limit
-        if len(self.requests[client_ip]) >= self.requests_per_minute:
+    def is_allowed(self, client_ip: str) -> bool:
+        """Check if request is allowed and record it if so."""
+        recent = self._get_recent_requests(client_ip)
+        if len(recent) >= self.requests_per_minute:
             return False
-
-        # Add new request
-        self.requests[client_ip].append(now)
+        self.requests[client_ip].append(time.time())
         return True
 
     def get_remaining(self, client_ip: str) -> int:
         """Get remaining requests for this minute."""
-        now = time.time()
-        minute_ago = now - 60
-
-        if client_ip not in self.requests:
-            return self.requests_per_minute
-
-        recent = [ts for ts in self.requests[client_ip] if ts > minute_ago]
-        return max(0, self.requests_per_minute - len(recent))
+        return max(0, self.requests_per_minute - len(self._get_recent_requests(client_ip)))
 
 
 rate_limiter = RateLimiter(requests_per_minute=30)
@@ -186,10 +168,7 @@ audit_logger = AuditLogger()
 # ============================================================
 
 class SQLValidator:
-    """
-    Additional SQL validation layer in Django.
-    Defense in depth - validates SQL even after NLP service validation.
-    """
+    """Defense-in-depth SQL validation layer in Django."""
 
     BLOCKED_KEYWORDS = {
         'INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER',
@@ -197,45 +176,28 @@ class SQLValidator:
         'INTO', 'COPY', 'LOAD', 'SET', 'DECLARE'
     }
 
-    BLOCKED_PATTERNS = [
-        'pg_',  # PostgreSQL system tables
-        'information_schema',
-        '--',   # SQL comments
-        '/*',   # Block comments
-        'xp_',  # SQL Server extended procedures
-        'sp_',  # SQL Server stored procedures
-    ]
+    BLOCKED_PATTERNS = ['pg_', 'information_schema', '--', '/*', 'xp_', 'sp_']
 
     @classmethod
     def validate(cls, sql: str) -> tuple:
-        """
-        Validate SQL query.
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
+        """Validate SQL query. Returns (is_valid, error_message)."""
         if not sql or not sql.strip():
             return False, "Empty SQL query"
 
         sql_upper = sql.upper().strip()
+        sql_lower = sql.lower()
 
-        # Must start with SELECT
         if not sql_upper.startswith('SELECT'):
             return False, "Only SELECT queries are allowed"
 
-        # Check for blocked keywords
         for keyword in cls.BLOCKED_KEYWORDS:
-            # Check for keyword as word (not part of another word)
             if f' {keyword} ' in f' {sql_upper} ' or sql_upper.startswith(f'{keyword} '):
                 return False, f"Blocked keyword: {keyword}"
 
-        # Check for blocked patterns
-        sql_lower = sql.lower()
         for pattern in cls.BLOCKED_PATTERNS:
             if pattern in sql_lower:
                 return False, f"Blocked pattern: {pattern}"
 
-        # Check for multiple statements
         if ';' in sql.rstrip(';'):
             return False, "Multiple statements not allowed"
 
@@ -278,30 +240,11 @@ def execute_safe_query(sql: str, limit: int = 100) -> list:
 def apply_row_level_security(sql: str, user_context: dict) -> str:
     """
     Apply row-level security filters based on user context.
-
-    In production, this would:
-    - Add WHERE clauses for organization/tenant filtering
-    - Restrict access based on user roles
-    - Filter sensitive columns
-
-    Args:
-        sql: Original SQL query
-        user_context: User permissions and context
-
-    Returns:
-        Modified SQL with security filters
+    For POC, returns SQL as-is. In production, add WHERE clauses for tenant filtering.
     """
-    # For POC, return SQL as-is
-    # In production, add filters like:
-    # - WHERE organization_id = {user.org_id}
-    # - WHERE is_public = true OR owner_id = {user.id}
-
     organization_id = user_context.get('organization_id')
-
     if organization_id:
-        # This is a simplified example - in production use parameterized queries
         logger.info(f"Row-level security: Filtering for org {organization_id}")
-
     return sql
 
 

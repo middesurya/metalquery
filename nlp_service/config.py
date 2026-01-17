@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     model_name: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     
-    # Rate Limiting - Industry Standard (Groq free tier: 30 req/min, 6000 tokens/min, 1000 req/day)
-    # Using 90% of limits for burst handling and safety margin
-    max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "27"))
-    max_tokens_per_minute: int = int(os.getenv("MAX_TOKENS_PER_MINUTE", "5400"))
+    # Rate Limiting - Higher limits for better UX (adjust via env vars if hitting Groq limits)
+    # Groq paid tier: 100 req/min, 100k tokens/min
+    max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "60"))
+    max_tokens_per_minute: int = int(os.getenv("MAX_TOKENS_PER_MINUTE", "50000"))
     max_output_tokens: int = int(os.getenv("MAX_OUTPUT_TOKENS", "512"))
 
     class Config:

@@ -120,83 +120,69 @@ class DataSummarizer:
             "sample_values": results[:3] if len(results) <= 3 else results[:2]
         }
 
+    # Pattern definitions for query analysis
+    AGGREGATION_PATTERNS = {
+        'AVG': ['average', 'avg', 'mean'],
+        'SUM': ['total', 'sum', 'cumulative'],
+        'COUNT': ['count', 'how many', 'number of'],
+        'MAX': ['maximum', 'max', 'highest', 'best', 'top'],
+        'MIN': ['minimum', 'min', 'lowest', 'worst', 'bottom'],
+    }
+
+    COMPARISON_PATTERNS = [
+        'compare', 'versus', 'vs', 'between', 'difference',
+        'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
+        'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
+        'by type', 'by category', 'by status', 'by grade', 'by reason',
+        'each furnace', 'each shift', 'each machine', 'each product',
+        'per furnace', 'per shift', 'per machine', 'per product',
+        'for each furnace', 'for each shift', 'for each machine',
+        'rank', 'ranking', 'top 5', 'top 10', 'top', 'bottom', 'best', 'worst',
+        'highest', 'lowest', 'most', 'least',
+        'which furnace', 'which shift', 'which machine', 'which product',
+        'across', 'all furnaces', 'all shifts', 'all machines', 'all products',
+        'statistics', 'summary by', 'grouped by', 'group by',
+        'show by', 'list by', 'display by', 'get by'
+    ]
+
+    DISTRIBUTION_PATTERNS = [
+        'breakdown', 'distribution', 'proportion', 'percentage of',
+        'share', 'composition', 'split', 'allocation',
+        'by type', 'by category', 'by reason', 'by cause',
+        'by status', 'by grade', 'by priority', 'by classification',
+        'grade distribution', 'status summary', 'quality distribution',
+        'defect breakdown', 'failure distribution',
+        'what percent', 'how much of', 'portion of'
+    ]
+
+    TREND_PATTERNS = [
+        'trend', 'over time', 'history', 'historical',
+        'last week', 'last month', 'last year', 'last 7 days', 'last 30 days',
+        'past', 'recent', 'daily', 'weekly', 'monthly', 'yearly',
+        'change', 'progression', 'evolution', 'increasing', 'decreasing',
+        'display trend', 'show trend', 'trend for'
+    ]
+
+    def _matches_any(self, text: str, patterns: list) -> bool:
+        """Check if text matches any pattern in the list."""
+        return any(p in text for p in patterns)
+
     def _detect_aggregation(self, question: str) -> str:
         """Detect aggregation type from question."""
         q = question.lower()
-
-        if any(w in q for w in ['average', 'avg', 'mean']):
-            return 'AVG'
-        if any(w in q for w in ['total', 'sum', 'cumulative']):
-            return 'SUM'
-        if any(w in q for w in ['count', 'how many', 'number of']):
-            return 'COUNT'
-        if any(w in q for w in ['maximum', 'max', 'highest', 'best', 'top']):
-            return 'MAX'
-        if any(w in q for w in ['minimum', 'min', 'lowest', 'worst', 'bottom']):
-            return 'MIN'
+        for agg_type, patterns in self.AGGREGATION_PATTERNS.items():
+            if self._matches_any(q, patterns):
+                return agg_type
         return None
 
     def _detect_comparison(self, question: str) -> bool:
-        """Detect if question asks for comparison (bar chart).
-        Based on FEW_SHOT_EXAMPLES patterns.
-        """
-        q = question.lower()
-        comparison_words = [
-            # Direct comparison
-            'compare', 'versus', 'vs', 'between', 'difference',
-            # By entity patterns (from few-shot examples) - EXPANDED
-            'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
-            'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
-            'by type', 'by category', 'by status', 'by grade', 'by reason',
-            'each furnace', 'each shift', 'each machine', 'each product',
-            'per furnace', 'per shift', 'per machine', 'per product',
-            'for each furnace', 'for each shift', 'for each machine',
-            # Ranking patterns
-            'rank', 'ranking', 'top 5', 'top 10', 'top', 'bottom', 'best', 'worst',
-            'highest', 'lowest', 'most', 'least',
-            'which furnace', 'which shift', 'which machine', 'which product',
-            # Group comparison - EXPANDED
-            'across', 'all furnaces', 'all shifts', 'all machines', 'all products',
-            'statistics', 'summary by', 'grouped by', 'group by',
-            # Show/list patterns with categories
-            'show by', 'list by', 'display by', 'get by'
-        ]
-        return any(w in q for w in comparison_words)
+        """Detect if question asks for comparison (bar chart)."""
+        return self._matches_any(question.lower(), self.COMPARISON_PATTERNS)
 
     def _detect_distribution(self, question: str) -> bool:
-        """Detect if question asks for distribution/breakdown (pie chart).
-        Based on FEW_SHOT_EXAMPLES patterns.
-        """
-        q = question.lower()
-        distribution_words = [
-            # Distribution keywords
-            'breakdown', 'distribution', 'proportion', 'percentage of',
-            'share', 'composition', 'split', 'allocation',
-            # By category patterns (for pie charts)
-            'by type', 'by category', 'by reason', 'by cause',
-            'by status', 'by grade', 'by priority', 'by classification',
-            # Quality/status distribution
-            'grade distribution', 'status summary', 'quality distribution',
-            'defect breakdown', 'failure distribution',
-            # Percentage patterns
-            'what percent', 'how much of', 'portion of'
-        ]
-        return any(w in q for w in distribution_words)
+        """Detect if question asks for distribution/breakdown (pie chart)."""
+        return self._matches_any(question.lower(), self.DISTRIBUTION_PATTERNS)
 
     def _detect_trend(self, question: str) -> bool:
-        """Detect if question asks for trend/time series (line chart).
-        Based on FEW_SHOT_EXAMPLES patterns.
-        """
-        q = question.lower()
-        trend_words = [
-            # Direct trend keywords
-            'trend', 'over time', 'history', 'historical',
-            # Time period patterns (from few-shot examples)
-            'last week', 'last month', 'last year', 'last 7 days', 'last 30 days',
-            'past', 'recent', 'daily', 'weekly', 'monthly', 'yearly',
-            # Change/progression
-            'change', 'progression', 'evolution', 'increasing', 'decreasing',
-            # Display trend patterns
-            'display trend', 'show trend', 'trend for'
-        ]
-        return any(w in q for w in trend_words)
+        """Detect if question asks for trend/time series (line chart)."""
+        return self._matches_any(question.lower(), self.TREND_PATTERNS)

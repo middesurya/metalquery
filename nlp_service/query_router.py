@@ -16,76 +16,64 @@ class QueryRouter:
     Routes queries to the appropriate handler (SQL generation vs BRD RAG).
     Enhanced with table-specific keywords for accurate routing.
     """
-    
-    # Keywords that suggest SQL/data queries
-    SQL_KEYWORDS = {
-        # Data retrieval with numbers/metrics
-        "show", "get", "list", "display", "how many", "what is", "what are",
-        "total", "average", "sum", "count", "minimum", "maximum", "min", "max",
-        "give me", "find", "which", "where", "when",
-        
-        # KPIs and metrics (numeric values) - ALL 20 KPI tables
-        "oee", "efficiency", "yield", "downtime", "mtbf", "mttr", "mtbs",
-        "output", "defect", "incidents", "energy", "production",
-        "cycle time", "rework", "compliance", "utilization", "delivery",
-        "first pass", "fpy", "otd", "safety",
-        
-        # Cycle Time specific keywords
-        "slowest", "fastest", "time per unit", "processing time",
-        "above 90", "above 80", "greater than", "less than", "threshold",
-        "crossed", "exceeded", "below",
-        
-        # Machine/Equipment keywords (from kpi tables)
-        "machine", "equipment", "furnace", "cast_bay", "electrod", "unkwn_eq",
-        
-        # Shift-based queries
-        "shift", "shift 4", "shift 12", "shift 20", "per shift", "by shift",
-        
-        # Product-based queries
-        "product", "product_type", "m004", "met30", "met32", "material",
-        
-        # Time-based (asking for data in a period)
-        "last week", "last month", "last year", "yesterday", "today", "between",
-        "last 7 days", "last 30 days", "last 90 days", "last 365 days",
-        "january", "february", "march", "april", "may", "june",
-        "july", "august", "september", "october", "november", "december",
-        "2024", "2025", "jan 7", "jan 8", "jan 9",
-        "2024-01-07", "2024-01-08", "2024-01-09",
-        
-        # Furnace specific data (with numbers)
-        "furnace 1", "furnace 2", "furnace 3", "furnace 4", "furnace 888",
-        "furnace no", "for furnace",
-        
-        # Aggregations and comparisons
-        "by furnace", "per furnace", "by date", "per day", "by day",
-        "trend", "compare", "comparison", "vs", "versus",
-        "top 5", "top 10", "highest", "lowest", "best", "worst",
-        "improved", "decreased", "increased", "variation", "spike", "spikes",
-        "distribution",
-        
-        # Alert/Exception queries
-        "records where", "incidents", "exceptions", "alert", "warning",
-        
-        # Core Process tables
-        "tap", "taps", "tap production", "tap count", "tap data",
-        "cast weight", "tapping", "grading", "grade",
-        
-        # Chatbot-feel queries that map to SQL
-        "investigate", "spending", "area", "changed", "caused",
-    }
-    
+
     # KPI metrics - when combined with "what is", route to SQL not BRD
     KPI_METRICS = {
-        # All 20 KPI metrics
         "oee", "efficiency", "yield", "downtime", "mtbf", "mttr", "mtbs",
         "production", "energy", "defect", "output", "cycle time",
         "maintenance compliance", "first pass yield", "rework rate",
         "capacity utilization", "on time delivery", "safety incidents",
         "energy efficiency", "energy used", "output rate", "production efficiency",
         "quantity produced", "planned maintenance",
-        # Derived/common terms
         "furnace health", "performance", "throughput",
     }
+
+    # Keywords that suggest SQL/data queries
+    SQL_KEYWORDS = (
+        # Data retrieval verbs
+        {"show", "get", "list", "display", "give me", "find", "which", "where", "when"}
+        # Question words with data intent
+        | {"how many", "what is", "what are"}
+        # Aggregation keywords
+        | {"total", "average", "sum", "count", "minimum", "maximum", "min", "max"}
+        # Include all KPI metrics
+        | KPI_METRICS
+        # Cycle time specific
+        | {"slowest", "fastest", "time per unit", "processing time",
+           "above 90", "above 80", "greater than", "less than", "threshold",
+           "crossed", "exceeded", "below"}
+        # Equipment keywords
+        | {"machine", "equipment", "furnace", "cast_bay", "electrod", "unkwn_eq"}
+        # Shift-based queries
+        | {"shift", "shift 4", "shift 12", "shift 20", "per shift", "by shift"}
+        # Product-based queries
+        | {"product", "product_type", "m004", "met30", "met32", "material"}
+        # Time periods
+        | {"last week", "last month", "last year", "yesterday", "today", "between",
+           "last 7 days", "last 30 days", "last 90 days", "last 365 days"}
+        # Months
+        | {"january", "february", "march", "april", "may", "june",
+           "july", "august", "september", "october", "november", "december"}
+        # Years and dates
+        | {"2024", "2025", "jan 7", "jan 8", "jan 9",
+           "2024-01-07", "2024-01-08", "2024-01-09"}
+        # Furnace specifics
+        | {"furnace 1", "furnace 2", "furnace 3", "furnace 4", "furnace 888",
+           "furnace no", "for furnace"}
+        # Aggregations and comparisons
+        | {"by furnace", "per furnace", "by date", "per day", "by day",
+           "trend", "compare", "comparison", "vs", "versus",
+           "top 5", "top 10", "highest", "lowest", "best", "worst",
+           "improved", "decreased", "increased", "variation", "spike", "spikes",
+           "distribution"}
+        # Alert/Exception queries
+        | {"records where", "incidents", "exceptions", "alert", "warning"}
+        # Core process tables
+        | {"tap", "taps", "tap production", "tap count", "tap data",
+           "cast weight", "tapping", "grading", "grade"}
+        # Chatbot-feel queries
+        | {"investigate", "spending", "area", "changed", "caused"}
+    )
     
     # ════════════════════════════════════════════════════════════════════════
     # BRD KEYWORDS - From 33 BRD Documents

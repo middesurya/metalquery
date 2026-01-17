@@ -238,112 +238,83 @@ class VizConfigGenerator:
             }
         }
 
-    # Helper methods
+    # Column type patterns
+    TEMPORAL_PATTERNS = ['date', 'time', 'timestamp', 'day', 'month', 'year', 'week', 'created']
+
+    # Label abbreviation corrections
+    LABEL_REPLACEMENTS = {
+        'Oee': 'OEE', 'Mtbf': 'MTBF', 'Mttr': 'MTTR',
+        'Kwh': 'kWh', 'Id': 'ID', 'No': 'No.', 'Avg': 'Average'
+    }
+
+    # Unit detection: (patterns, unit, max_value)
+    UNIT_RULES = [
+        (['percentage', 'percent', 'oee', 'yield', 'rate', 'efficiency'], '%', 100),
+        (['hour', 'hrs', 'time', 'mtbf', 'mttr', 'duration'], 'hrs', 24),
+        (['kwh', 'energy', 'power', 'watt'], 'kWh', 10000),
+        (['kg', 'weight', 'mass', 'ton'], 'kg', 1000),
+        (['temperature', 'temp', 'celsius', 'fahrenheit'], 'C', 2000),
+        (['count', 'number', 'qty', 'quantity'], '', 1000),
+    ]
+
+    def _find_column(self, results: List[Dict], predicate) -> Optional[str]:
+        """Find first column matching a predicate function."""
+        if not results or not results[0]:
+            return None
+        for key, value in results[0].items():
+            if predicate(key, value):
+                return key
+        return None
 
     def _find_x_axis(self, results: List[Dict]) -> Optional[str]:
         """Find best column for X axis (temporal or first column)."""
         if not results:
             return None
-
-        columns = list(results[0].keys())
-        temporal_patterns = ['date', 'time', 'timestamp', 'day', 'month', 'year', 'week', 'created']
-
-        # Look for temporal columns first
-        for col in columns:
-            if any(p in col.lower() for p in temporal_patterns):
-                return col
-
-        # Return first column
-        return columns[0] if columns else None
+        temporal = self._find_column(
+            results,
+            lambda k, v: any(p in k.lower() for p in self.TEMPORAL_PATTERNS)
+        )
+        if temporal:
+            return temporal
+        return list(results[0].keys())[0] if results[0] else None
 
     def _find_y_axis(self, results: List[Dict]) -> Optional[str]:
         """Find best column for Y axis (numeric)."""
-        if not results:
-            return None
-
-        for key, value in results[0].items():
-            if isinstance(value, (int, float)):
-                return key
-
-        # Return last column as fallback
-        columns = list(results[0].keys())
+        numeric = self._find_column(results, lambda k, v: isinstance(v, (int, float)))
+        if numeric:
+            return numeric
+        columns = list(results[0].keys()) if results and results[0] else []
         return columns[-1] if columns else None
 
     def _find_categorical(self, results: List[Dict]) -> Optional[str]:
         """Find best categorical column."""
-        if not results:
-            return None
-
-        for key, value in results[0].items():
-            if isinstance(value, str):
-                return key
-
-        return list(results[0].keys())[0] if results[0] else None
+        categorical = self._find_column(results, lambda k, v: isinstance(v, str))
+        if categorical:
+            return categorical
+        return list(results[0].keys())[0] if results and results[0] else None
 
     def _get_first_value(self, results: List[Dict], key: Optional[str]) -> Any:
         """Get first value for a key."""
         if not results or not key:
             return 0
-
         value = results[0].get(key, 0)
-        if isinstance(value, float):
-            return round(value, 2)
-        return value
+        return round(value, 2) if isinstance(value, float) else value
 
     def _format_label(self, column_name: Optional[str]) -> str:
         """Format column name into human-readable label."""
         if not column_name:
             return "Value"
-
-        # Replace underscores with spaces and title case
         label = column_name.replace('_', ' ').title()
-
-        # Handle common abbreviations
-        replacements = {
-            'Oee': 'OEE',
-            'Mtbf': 'MTBF',
-            'Mttr': 'MTTR',
-            'Kwh': 'kWh',
-            'Id': 'ID',
-            'No': 'No.',
-            'Avg': 'Average'
-        }
-
-        for old, new in replacements.items():
+        for old, new in self.LABEL_REPLACEMENTS.items():
             label = label.replace(old, new)
-
         return label
 
     def _detect_unit_and_max(self, column_name: Optional[str]) -> tuple:
         """Detect unit and max value based on column name."""
         if not column_name:
             return '', 100
-
         col = column_name.lower()
-
-        # Percentage metrics
-        if any(p in col for p in ['percentage', 'percent', 'oee', 'yield', 'rate', 'efficiency']):
-            return '%', 100
-
-        # Time metrics
-        if any(p in col for p in ['hour', 'hrs', 'time', 'mtbf', 'mttr', 'duration']):
-            return 'hrs', 24
-
-        # Energy metrics
-        if any(p in col for p in ['kwh', 'energy', 'power', 'watt']):
-            return 'kWh', 10000
-
-        # Weight metrics
-        if any(p in col for p in ['kg', 'weight', 'mass', 'ton']):
-            return 'kg', 1000
-
-        # Temperature metrics
-        if any(p in col for p in ['temperature', 'temp', 'celsius', 'fahrenheit']):
-            return 'C', 2000
-
-        # Count metrics
-        if any(p in col for p in ['count', 'number', 'qty', 'quantity']):
-            return '', 1000
-
-        # Default
+        for patterns, unit, max_val in self.UNIT_RULES:
+            if any(p in col for p in patterns):
+                return unit, max_val
         return '', 100

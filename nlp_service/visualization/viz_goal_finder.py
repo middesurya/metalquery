@@ -143,6 +143,18 @@ Return ONLY valid JSON (no markdown, no explanation):
             logger.warning(f"JSON parse error: {e}")
             return self.find_goal_heuristic(data_summary, "")
 
+    # Patterns indicating "by category" aggregation queries
+    BY_CATEGORY_PATTERNS = [
+        'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
+        'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
+        'by type', 'by category', 'by status', 'by grade', 'by reason',
+        'per furnace', 'per shift', 'per machine', 'each furnace', 'each shift',
+        'for each', 'across furnaces', 'across shifts', 'all furnaces', 'all shifts'
+    ]
+
+    # Patterns indicating percentage-based metrics
+    PERCENTAGE_PATTERNS = ['percent', 'oee', 'yield', 'rate', 'efficiency']
+
     def find_goal_heuristic(self, data_summary: Dict, question: str) -> Dict:
         """
         Fallback heuristic-based goal finding when LLM is unavailable.
@@ -160,124 +172,62 @@ Return ONLY valid JSON (no markdown, no explanation):
         temporal_cols = data_summary.get('temporal_columns', [])
         q_lower = question.lower()
 
-        # Rule 1 (PRIORITY): AGGRESSIVE "by X" detection → bar chart
-        # This MUST come first because user explicitly requested aggregation by category
-        # Even if there's only 1 row, the intent is clear: compare/aggregate by category
-        by_patterns = [
-            'by furnace', 'by shift', 'by machine', 'by plant', 'by workshop',
-            'by product', 'by material', 'by supplier', 'by equipment', 'by operator',
-            'by type', 'by category', 'by status', 'by grade', 'by reason',
-            'per furnace', 'per shift', 'per machine', 'each furnace', 'each shift',
-            'for each', 'across furnaces', 'across shifts', 'all furnaces', 'all shifts'
-        ]
-        if any(pattern in q_lower for pattern in by_patterns):
-            x_col = categorical_cols[0] if categorical_cols else None
-            y_col = numeric_cols[0] if numeric_cols else None
+        x_col = categorical_cols[0] if categorical_cols else None
+        y_col = numeric_cols[0] if numeric_cols else None
+
+        # Rule 1: "by X" aggregation queries -> bar chart
+        if any(p in q_lower for p in self.BY_CATEGORY_PATTERNS):
             if x_col and y_col and row_count >= 1:
-                return {
-                    "chart_type": "bar",
-                    "x_axis": x_col,
-                    "y_axis": y_col,
-                    "title": self._generate_title(question, y_col)
-                }
+                return self._make_goal("bar", x_col, y_col, question)
 
-        # Rule 2: Single value → progress_bar or kpi_card
-        # Only applies if NOT a "by X" query (checked above)
+        # Rule 2: Single value -> progress_bar or kpi_card
         if data_summary.get('is_single_value'):
-            y_col = numeric_cols[0] if numeric_cols else None
             title = self._generate_title(question, y_col)
+            if y_col and any(p in y_col.lower() for p in self.PERCENTAGE_PATTERNS):
+                return {"chart_type": "progress_bar", "y_axis": y_col, "title": title}
+            return {"chart_type": "kpi_card", "y_axis": y_col, "title": title}
 
-            # Use progress_bar for percentage metrics
-            if y_col and any(p in y_col.lower() for p in ['percent', 'oee', 'yield', 'rate', 'efficiency']):
-                return {
-                    "chart_type": "progress_bar",
-                    "y_axis": y_col,
-                    "title": title
-                }
-            return {
-                "chart_type": "kpi_card",
-                "y_axis": y_col,
-                "title": title
-            }
-
-        # Rule 3: Multiple KPIs in single row → metric_grid
+        # Rule 3: Multiple KPIs in single row -> metric_grid
         if data_summary.get('is_multi_metric') and len(numeric_cols) >= 2:
-            return {
-                "chart_type": "metric_grid",
-                "title": self._generate_title(question, None)
-            }
+            return {"chart_type": "metric_grid", "title": self._generate_title(question, None)}
 
-        # Rule 4: Distribution explicitly requested → pie chart
-        if data_summary.get('distribution_detected') and data_summary.get('is_distribution') and row_count <= 8:
-            x_col = categorical_cols[0] if categorical_cols else None
-            y_col = numeric_cols[0] if numeric_cols else None
-            if x_col and y_col:
-                return {
-                    "chart_type": "pie",
-                    "x_axis": x_col,
-                    "y_axis": y_col,
-                    "title": self._generate_title(question, y_col)
-                }
+        # Rule 4: Distribution requested with few categories -> pie chart
+        if data_summary.get('distribution_detected') and data_summary.get('is_distribution'):
+            if x_col and y_col and row_count <= 8:
+                return self._make_goal("pie", x_col, y_col, question)
 
-        # Rule 5: Comparison detected → bar chart (BEFORE time series check)
+        # Rule 5: Comparison detected -> bar chart
         if data_summary.get('comparison_detected') or data_summary.get('is_comparison'):
-            x_col = categorical_cols[0] if categorical_cols else None
-            y_col = numeric_cols[0] if numeric_cols else None
             if x_col and y_col and row_count >= 2:
-                return {
-                    "chart_type": "bar",
-                    "x_axis": x_col,
-                    "y_axis": y_col,
-                    "title": self._generate_title(question, y_col)
-                }
+                return self._make_goal("bar", x_col, y_col, question)
 
-        # Rule 6: Time series with EXPLICIT trend keywords → line chart
-        # Only use line chart if trend is explicitly mentioned
-        if data_summary.get('has_time_series') and data_summary.get('trend_detected') and temporal_cols and numeric_cols:
-            return {
-                "chart_type": "line",
-                "x_axis": temporal_cols[0],
-                "y_axis": numeric_cols[0],
-                "title": self._generate_title(question, numeric_cols[0])
-            }
+        # Rule 6: Time series with trend keywords -> line chart
+        if data_summary.get('has_time_series') and data_summary.get('trend_detected'):
+            if temporal_cols and numeric_cols:
+                return self._make_goal("line", temporal_cols[0], numeric_cols[0], question)
 
-        # Rule 7: Categorical with values (3-50 rows) → bar chart
-        # This catches most comparison queries that weren't caught earlier
+        # Rule 7: Categorical with values (3-50 rows) -> bar chart
         if categorical_cols and numeric_cols and 3 <= row_count <= 50:
-            return {
-                "chart_type": "bar",
-                "x_axis": categorical_cols[0],
-                "y_axis": numeric_cols[0],
-                "title": self._generate_title(question, numeric_cols[0])
-            }
+            return self._make_goal("bar", categorical_cols[0], numeric_cols[0], question)
 
-        # Rule 8: Distribution with few categories → pie chart (fallback)
+        # Rule 8: Distribution fallback -> pie chart
         if data_summary.get('is_distribution') and row_count <= 8:
-            x_col = categorical_cols[0] if categorical_cols else None
-            y_col = numeric_cols[0] if numeric_cols else None
             if x_col and y_col:
-                return {
-                    "chart_type": "pie",
-                    "x_axis": x_col,
-                    "y_axis": y_col,
-                    "title": self._generate_title(question, y_col)
-                }
+                return self._make_goal("pie", x_col, y_col, question)
 
-        # Rule 9: Small dataset with time aspect → line (only if no categories)
-        if row_count <= 30 and numeric_cols and not categorical_cols:
-            x_col = temporal_cols[0] if temporal_cols else None
-            if x_col:
-                return {
-                    "chart_type": "line",
-                    "x_axis": x_col,
-                    "y_axis": numeric_cols[0],
-                    "title": self._generate_title(question, numeric_cols[0])
-                }
+        # Rule 9: Small temporal dataset without categories -> line chart
+        if row_count <= 30 and numeric_cols and not categorical_cols and temporal_cols:
+            return self._make_goal("line", temporal_cols[0], numeric_cols[0], question)
 
-        # Default: table for complex data
+        return {"chart_type": "table", "title": "Query Results"}
+
+    def _make_goal(self, chart_type: str, x_col: str, y_col: str, question: str) -> Dict:
+        """Create a standardized goal dictionary."""
         return {
-            "chart_type": "table",
-            "title": "Query Results"
+            "chart_type": chart_type,
+            "x_axis": x_col,
+            "y_axis": y_col,
+            "title": self._generate_title(question, y_col)
         }
 
     def _generate_title(self, question: str, metric_col: Optional[str]) -> str:
