@@ -620,7 +620,12 @@ from .relevant_models import RELEVANT_MODELS, TABLE_DESCRIPTIONS
 def get_local_schema():
     """
     Generate schema dictionary from local Django models.
+    Only includes FK references to tables that are in RELEVANT_MODELS to prevent
+    LLM from attempting JOINs with unauthorized tables.
     """
+    # Build set of allowed table names first
+    allowed_tables = {model._meta.db_table for model in RELEVANT_MODELS}
+
     schema = {}
     for model in RELEVANT_MODELS:
         table_name = model._meta.db_table
@@ -642,9 +647,14 @@ def get_local_schema():
                 if hasattr(field, 'verbose_name') and field.verbose_name:
                     field_info["description"] = str(field.verbose_name)
 
-                # Add relationship info
+                # Add relationship info ONLY if related table is allowed
+                # This prevents LLM from trying to JOIN with unauthorized tables
                 if field.is_relation and field.related_model:
-                    field_info["foreign_key"] = field.related_model._meta.db_table
+                    related_table = field.related_model._meta.db_table
+                    if related_table in allowed_tables:
+                        field_info["foreign_key"] = related_table
+                    # If FK points to unauthorized table, omit the FK info
+                    # The column still exists and can be used for filtering
 
                 fields.append(field_info)
             except Exception:

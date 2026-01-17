@@ -443,6 +443,23 @@ Relative Date Filters:
 
 ════════════════════════════════════════════════════════════════════════════════════
 
+⚠️ TABLE ACCESS RESTRICTIONS (CRITICAL - SECURITY):
+1. ONLY use tables explicitly listed in the schema provided below
+2. NEVER reference or JOIN with tables NOT in the schema (e.g., log_book_equipments, material_master, etc.)
+3. For machine filtering: Use the `machine_id` column directly in WHERE clause - do NOT JOIN to get machine info
+4. For furnace filtering: Use `furnace_no` column directly - do NOT JOIN unnecessarily
+5. If a query would require a table not in the schema, use only the available columns from authorized tables
+
+Example - CORRECT:
+  SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data WHERE machine_id = 'CAST_BAY'
+
+Example - WRONG (DO NOT DO THIS):
+  SELECT date, oee_percentage FROM kpi_overall_equipment_efficiency_data k
+  JOIN log_book_equipments e ON k.machine_id = e.equipment_code  -- UNAUTHORIZED TABLE!
+  WHERE e.equipment_name = 'CAST_BAY'
+
+════════════════════════════════════════════════════════════════════════════════════
+
 MULTI-TABLE JOIN STRATEGY:
 
 1. IDENTIFY TARGET TABLE
