@@ -356,14 +356,22 @@ const SuggestionChip = ({ text, onClick }) => (
  * Main App Component
  */
 function App() {
-    const [messages, setMessages] = useState([
-        {
+    const [messages, setMessages] = useState(() => {
+        const savedMessages = localStorage.getItem('app_chat_history');
+        if (savedMessages) {
+            try {
+                return JSON.parse(savedMessages);
+            } catch (e) {
+                console.error("Failed to parse chat history", e);
+            }
+        }
+        return [{
             id: 1,
             text: "Welcome to IGNIS Furnace Analytics! I can help you query furnace KPIs, analyze production data, or answer questions from BRD documents. What would you like to know?",
             isUser: false,
             timestamp: new Date().toISOString()
-        }
-    ]);
+        }];
+    });
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -403,6 +411,7 @@ function App() {
 
     useEffect(() => {
         scrollToBottom();
+        localStorage.setItem('app_chat_history', JSON.stringify(messages));
     }, [messages]);
 
     useEffect(() => {
@@ -504,12 +513,14 @@ function App() {
     };
 
     const clearChat = () => {
-        setMessages([{
+        const defaultMessage = [{
             id: Date.now(),
             text: "Chat cleared. How can I help you explore the IGNIS database?",
             isUser: false,
             timestamp: new Date().toISOString()
-        }]);
+        }];
+        setMessages(defaultMessage);
+        localStorage.setItem('app_chat_history', JSON.stringify(defaultMessage));
         setEditingMessageId(null);
     };
 

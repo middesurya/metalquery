@@ -48,14 +48,19 @@ class AccuracyScorer:
         warnings = diagnostic_result.get('warnings', [])
 
         # 1. Critical Errors: Immediate failure
-        if not diagnostic_result.get('valid', False):
-            return 0  # Invalid SQL is 0 confidence
+        # We NO LONGER immediately return 0 for invalid, because "invalid" might just mean "table not found"
+        # if not diagnostic_result.get('valid', False):
+        #    return 0  # Invalid SQL is 0 confidence
         
-        if any("table" in e.lower() and "not found" in e.lower() for e in errors):
-            return 0
-            
-        # 2. Major Errors (if any remained in 'errors' list but considered valid for some reason)
-        score -= (len(errors) * 20)
+        # 2. Major Errors
+        table_errors = [e for e in errors if "table" in e.lower() and "not found" in e.lower()]
+        if table_errors:
+            # If table not found, just penalize heavily but don't zerocost (might be schema sync issue)
+            score -= 60
+        
+        # Other errors
+        other_errors = [e for e in errors if e not in table_errors]
+        score -= (len(other_errors) * 20)
         
         # 3. Warnings (Minor issues)
         score -= (len(warnings) * 5)
