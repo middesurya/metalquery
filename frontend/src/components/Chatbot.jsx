@@ -134,14 +134,22 @@ const TypingIndicator = () => (
  * Main chatbot UI for NLP-to-SQL queries on Metallurgy Database
  */
 const Chatbot = () => {
-    const [messages, setMessages] = useState([
-        {
+    const [messages, setMessages] = useState(() => {
+        const savedMessages = localStorage.getItem('widget_chat_history');
+        if (savedMessages) {
+            try {
+                return JSON.parse(savedMessages);
+            } catch (e) {
+                console.error("Failed to parse widget chat history", e);
+            }
+        }
+        return [{
             id: 1,
             text: "Hello! I'm your IGNIS Manufacturing Assistant. Ask me about furnace performance, KPIs, production data, or BRD documentation. For example: 'Show OEE for furnace 1 last week' or 'What is the EHS reporting process?'",
             isUser: false,
             timestamp: new Date().toISOString()
-        }
-    ]);
+        }];
+    });
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(true);
@@ -156,6 +164,7 @@ const Chatbot = () => {
 
     useEffect(() => {
         scrollToBottom();
+        localStorage.setItem('widget_chat_history', JSON.stringify(messages));
     }, [messages]);
 
     // Focus input when chat opens

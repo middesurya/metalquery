@@ -58,9 +58,11 @@ class SchemaLoader:
             data = response.json()
             
             if not data.get("success"):
-                raise ValueError("API returned success=False")
+                logger.error(f"Schema API returned success=False: {data.get('error')}")
+                raise ValueError(f"API Error: {data.get('error')}")
                 
             raw_schema = data.get("schema", {})
+            logger.info(f"raw_schema keys: {list(raw_schema.keys())}")
             
             # Clear existing cache
             self._schema_cache.clear()
@@ -136,6 +138,7 @@ class SchemaLoader:
         Returns: {table_name: {columns: {col_name: col_type}}}
         """
         if not self._schema_cache:
+            logger.info("Schema cache empty, reloading...")
             self.load_schema()
         
         result = {}

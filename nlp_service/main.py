@@ -531,14 +531,33 @@ async def format_response(request: FormatResponseRequest):
         if row_count == 0:
             response_text = f"No data found for: '{request.question}'"
         elif row_count == 1:
-            response_text = f"Result for '{request.question}':\n\n{results}"
+            # Clean formatting for single result
+            row = results[0]
+            if isinstance(row, dict):
+                formatted_items = []
+                for k, v in row.items():
+                    # Format numbers nicely
+                    val_str = f"{v:,.2f}" if isinstance(v, (int, float)) else str(v)
+                    # Clean key name (remove underscores, capitalize)
+                    key_str = k.replace('_', ' ').title()
+                    formatted_items.append(f"**{key_str}**: {val_str}")
+                
+                response_text = f"Here is the result for '{request.question}':\n\n" + "\n".join(formatted_items)
+            else:
+                response_text = f"Result: {str(row)}"
         else:
             preview = results[:5]
-            response_text = f"Found {row_count} results.\n\nFirst {len(preview)}:\n"
+            response_text = f"Found {row_count} results for '{request.question}'.\n\n**Top {len(preview)}:**\n"
             for i, row in enumerate(preview, 1):
-                response_text += f"\n{i}. {row}"
+                if isinstance(row, dict):
+                    # concise single line per row
+                    row_str = ", ".join([f"{v}" for v in row.values()])
+                    response_text += f"\n{i}. {row_str}"
+                else:
+                    response_text += f"\n{i}. {row}"
+            
             if row_count > 5:
-                response_text += f"\n\n... and {row_count - 5} more rows."
+                response_text += f"\n\n... and {row_count - 5} more rows (see full table below)."
 
         return FormatResponseResponse(
             success=True,
@@ -915,6 +934,6 @@ if __name__ == "__main__":
         "main:app",
         host=settings.nlp_service_host,
         port=settings.nlp_service_port,
-        reload=False  # Disabled for stable RAG state
+        reload=True  # Enabled for development updates
     )
 
