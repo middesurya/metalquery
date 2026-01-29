@@ -204,6 +204,16 @@ async def startup_event():
         logger.warning(f"⚠ Visualization pipeline initialization failed: {e}")
         viz_pipeline = None
 
+    # ✅ Initialize STT Service (Lazy load on first request to speed up boot, or here)
+    # We will let it lazy load to not block startup too much, but basic import check is good.
+    try:
+        from stt_service import stt_service
+        # Pre-initialize if you want it ready immediately (optional, might take time)
+        # stt_service.initialize() 
+        logger.info("✓ STT Service registered")
+    except Exception as e:
+        logger.warning(f"⚠ STT Service registration failed: {e}")
+
     logger.info("✓ Query Guard initialized")
 
 # ============================================================
@@ -531,14 +541,33 @@ async def format_response(request: FormatResponseRequest):
         if row_count == 0:
             response_text = f"No data found for: '{request.question}'"
         elif row_count == 1:
-            response_text = f"Result for '{request.question}':\n\n{results}"
+            # Clean formatting for single result
+            row = results[0]
+            if isinstance(row, dict):
+                formatted_items = []
+                for k, v in row.items():
+                    # Format numbers nicely
+                    val_str = f"{v:,.2f}" if isinstance(v, (int, float)) else str(v)
+                    # Clean key name (remove underscores, capitalize)
+                    key_str = k.replace('_', ' ').title()
+                    formatted_items.append(f"**{key_str}**: {val_str}")
+                
+                response_text = f"Here is the result for '{request.question}':\n\n" + "\n".join(formatted_items)
+            else:
+                response_text = f"Result: {str(row)}"
         else:
             preview = results[:5]
-            response_text = f"Found {row_count} results.\n\nFirst {len(preview)}:\n"
+            response_text = f"Found {row_count} results for '{request.question}'.\n\n**Top {len(preview)}:**\n"
             for i, row in enumerate(preview, 1):
-                response_text += f"\n{i}. {row}"
+                if isinstance(row, dict):
+                    # concise single line per row
+                    row_str = ", ".join([f"{v}" for v in row.values()])
+                    response_text += f"\n{i}. {row_str}"
+                else:
+                    response_text += f"\n{i}. {row}"
+            
             if row_count > 5:
-                response_text += f"\n\n... and {row_count - 5} more rows."
+                response_text += f"\n\n... and {row_count - 5} more rows (see full table below)."
 
         return FormatResponseResponse(
             success=True,
@@ -550,6 +579,59 @@ async def format_response(request: FormatResponseRequest):
         return FormatResponseResponse(
             success=False,
             error=f"Format failed: {str(e)}"
+        )
+
+
+# ============================================================
+# ✅ SPEECH-TO-TEXT ENDPOINT
+# ============================================================
+
+from fastapi import UploadFile, File
+import shutil
+import tempfile
+
+class TranscribeResponse(BaseModel):
+    success: bool
+    text: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/api/v1/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    Transcribe uploaded audio file using Faster-Whisper (CPU optimized).
+    Supports .wav, .mp3, .webm, etc.
+    """
+    try:
+        # Save upload to temporary file
+        suffix = Path(file.filename).suffix
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        
+        logger.info(f"🎤 Received audio file: {file.filename} -> {tmp_path}")
+
+        try:
+            from stt_service import stt_service
+            text = stt_service.transcribe(tmp_path)
+            
+            # Cleanup
+            os.unlink(tmp_path)
+            
+            return TranscribeResponse(
+                success=True,
+                text=text
+            )
+            
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise e
+
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return TranscribeResponse(
+            success=False,
+            error=f"Transcription failed: {str(e)}"
         )
 
 
@@ -915,6 +997,6 @@ if __name__ == "__main__":
         "main:app",
         host=settings.nlp_service_host,
         port=settings.nlp_service_port,
-        reload=False  # Disabled for stable RAG state
+        reload=True  # Enabled for development updates
     )
 

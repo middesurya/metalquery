@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 import ChartRenderer from './charts/ChartRenderer';
+import { downloadImage } from '../utils/downloadHelper';
 
 // Django Backend API URL (Django handles auth, executes queries, and generates chart configs)
 const BACKEND_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -57,7 +58,34 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                 {message.results && message.results.length > 0 && (
                     <div className="message-results">
                         <details open={!message.chart_config}>
-                            <summary>View Data ({message.results.length} rows)</summary>
+                            <summary className="results-summary">
+                                <span>View Data ({message.results.length} rows)</span>
+                                <button
+                                    className="export-csv-btn"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        const headers = Object.keys(message.results[0]);
+                                        const csvContent = [
+                                            headers.join(','),
+                                            ...message.results.map(row => headers.map(fieldName =>
+                                                JSON.stringify(row[fieldName], (key, value) => value === null ? '' : value)
+                                            ).join(','))
+                                        ].join('\n');
+
+                                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.setAttribute('download', `data_export_${new Date().toISOString().slice(0, 10)}.csv`);
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                    title="Export to CSV"
+                                >
+                                    📥 Export CSV
+                                </button>
+                            </summary>
                             <div className="results-table-wrapper">
                                 <table className="results-table">
                                     <thead>
@@ -98,6 +126,16 @@ const ChatMessage = ({ message, isUser, onEdit }) => {
                                         onClick={() => window.open(img.data, '_blank')}
                                         title={`From: ${img.source || 'BRD Document'} - Click to enlarge`}
                                     />
+                                    <button
+                                        className="image-download-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            downloadImage(img.data, `screenshot_${idx + 1}_${new Date().toISOString().slice(0, 10)}.png`);
+                                        }}
+                                        title="Download Image"
+                                    >
+                                        ⬇️
+                                    </button>
                                     <span className="image-source">{img.source || 'BRD'}</span>
                                 </div>
                             ))}
@@ -134,14 +172,22 @@ const TypingIndicator = () => (
  * Main chatbot UI for NLP-to-SQL queries on Metallurgy Database
  */
 const Chatbot = () => {
-    const [messages, setMessages] = useState([
-        {
+    const [messages, setMessages] = useState(() => {
+        const savedMessages = localStorage.getItem('widget_chat_history');
+        if (savedMessages) {
+            try {
+                return JSON.parse(savedMessages);
+            } catch (e) {
+                console.error("Failed to parse widget chat history", e);
+            }
+        }
+        return [{
             id: 1,
             text: "Hello! I'm your IGNIS Manufacturing Assistant. Ask me about furnace performance, KPIs, production data, or BRD documentation. For example: 'Show OEE for furnace 1 last week' or 'What is the EHS reporting process?'",
             isUser: false,
             timestamp: new Date().toISOString()
-        }
-    ]);
+        }];
+    });
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(true);
@@ -156,6 +202,7 @@ const Chatbot = () => {
 
     useEffect(() => {
         scrollToBottom();
+        localStorage.setItem('widget_chat_history', JSON.stringify(messages));
     }, [messages]);
 
     // Focus input when chat opens
@@ -164,6 +211,89 @@ const Chatbot = () => {
             inputRef.current?.focus();
         }
     }, [isOpen]);
+
+    // ==========================================================
+    // 🎙️ VOICE RECORDING LOGIC
+    // ==========================================================
+    const [isRecording, setIsRecording] = useState(false);
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+
+    const handleMicClick = async () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                await sendAudio(audioBlob);
+
+                // Stop all tracks to release mic
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Could not access microphone. Please check permissions.");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const sendAudio = async (audioBlob) => {
+        setInputValue("Listening... 👂, Processing...");
+        setIsLoading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", audioBlob, "recording.webm");
+
+            const response = await fetch(`${BACKEND_API_URL}/api/chatbot/transcribe/`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setInputValue(data.text);
+                // Optional: Auto-send if high confidence? For now let user edit.
+                inputRef.current?.focus();
+            } else {
+                setInputValue("");
+                alert(`Transcription failed: ${data.error}`);
+            }
+        } catch (error) {
+            console.error("Transcription error:", error);
+            setInputValue("");
+            alert("Failed to send audio for transcription.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     /**
      * Send message to NLP Service API
@@ -341,7 +471,6 @@ const Chatbot = () => {
                         </div>
                     )}
 
-                    {/* Input Area */}
                     <div className="chatbot-input">
                         <input
                             ref={inputRef}
@@ -352,6 +481,18 @@ const Chatbot = () => {
                             placeholder="Ask about furnace, OEE, production..."
                             disabled={isLoading}
                         />
+
+                        {/* Mic Button - Moved here for better visibility */}
+                        <button
+                            className={`mic-button ${isRecording ? 'recording' : ''}`}
+                            onClick={handleMicClick}
+                            disabled={isLoading}
+                            title={isRecording ? "Stop Recording" : "Speak"}
+                            type="button"
+                        >
+                            {isRecording ? '🟥' : '🎙️'}
+                        </button>
+
                         <button
                             onClick={editingMessageId ? handleSubmitEdit : sendMessage}
                             disabled={!inputValue.trim() || isLoading}

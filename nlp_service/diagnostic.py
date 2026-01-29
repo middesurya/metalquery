@@ -18,7 +18,8 @@ class SQLDiagnostic:
     
     def extract_table_name(self, sql: str) -> Optional[str]:
         """Extract table name from SQL query."""
-        match = re.search(r'FROM\s+(\w+)', sql, re.IGNORECASE)
+        # Handle FROM "table", FROM `table`, FROM table
+        match = re.search(r'FROM\s+["`]?(\w+)["`]?\b', sql, re.IGNORECASE)
         return match.group(1).lower() if match else None
     
     def extract_columns(self, sql: str) -> List[str]:
@@ -117,7 +118,12 @@ class SQLDiagnostic:
         table_name = self.extract_table_name(sql)
         if table_name:
             table_lower = table_name.lower()
-            if table_lower not in [t.lower() for t in self.tables]:
+            
+            # CHECK: If schema is empty, we can't validate, so skip strict check
+            if not self.tables:
+                warnings.append(f"Schema empty, skipping validation for table '{table_name}'")
+                # Assume valid if we can't check
+            elif table_lower not in [t.lower() for t in self.tables]:
                 errors.append(f"Table '{table_name}' not found in schema")
                 # Suggest similar tables
                 similar = [t for t in self.tables if table_lower in t.lower() or t.lower() in table_lower]
@@ -130,11 +136,13 @@ class SQLDiagnostic:
                 select_cols = self.extract_columns(sql)
                 for col in select_cols:
                     if col != '*' and col not in valid_cols and col not in ['as']:
-                        warnings.append(f"Column '{col}' may not exist in {table_name}")
+                         # If column list is empty/unknown, don't warn
+                        if valid_cols:
+                            warnings.append(f"Column '{col}' may not exist in {table_name}")
                 
                 where_cols = self.extract_where_columns(sql)
                 for col in where_cols:
-                    if col not in valid_cols:
+                    if valid_cols and col not in valid_cols:
                         # Check for common issues
                         if col == 'furnace_id':
                             errors.append("Use 'furnace_no' instead of 'furnace_id'")
