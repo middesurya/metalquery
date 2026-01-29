@@ -607,21 +607,21 @@ async def transcribe_audio(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
-        
+
         logger.info(f"🎤 Received audio file: {file.filename} -> {tmp_path}")
 
         try:
             from stt_service import stt_service
             text = stt_service.transcribe(tmp_path)
-            
+
             # Cleanup
             os.unlink(tmp_path)
-            
+
             return TranscribeResponse(
                 success=True,
                 text=text
             )
-            
+
         except Exception as e:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)

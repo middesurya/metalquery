@@ -455,19 +455,26 @@ class BRDLoader:
     
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """Search for relevant document chunks (text only)."""
+        logger.info(f"Search called with query='{query}', top_k={top_k}")
+        logger.info(f"_initialized={self._initialized}, vectorstore={self.vectorstore is not None}")
+
         if not self._initialized:
             logger.warning("Vector store not initialized")
             return []
-        
+
         try:
             model = self._get_embedding_model()
+            logger.info(f"Got embedding model: {model}")
             query_embedding = model.encode([query]).tolist()
-            
+            logger.info(f"Generated embedding with shape: {len(query_embedding)}x{len(query_embedding[0]) if query_embedding else 0}")
+
+            logger.info(f"Querying vectorstore: {self.vectorstore}")
             results = self.vectorstore.query(
                 query_embeddings=query_embedding,
                 n_results=top_k
             )
-            
+            logger.info(f"Query returned: documents={len(results.get('documents', [[]])[0])}")
+
             search_results = []
             for i, doc in enumerate(results['documents'][0]):
                 search_results.append({
@@ -475,11 +482,12 @@ class BRDLoader:
                     'metadata': results['metadatas'][0][i] if results['metadatas'] else {},
                     'distance': results['distances'][0][i] if results['distances'] else 0
                 })
-            
+
+            logger.info(f"Returning {len(search_results)} results")
             return search_results
-            
+
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error(f"Search failed: {e}", exc_info=True)
             return []
     
     def search_images(self, query: str, top_k: int = 3, min_relevance: float = 0.5) -> List[Dict]:
