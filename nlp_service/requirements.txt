@@ -14,8 +14,9 @@ python-dotenv==1.0.0
 pydantic==2.5.2
 # RAG dependencies for BRD documents
 pymupdf>=1.23.0
-chromadb>=0.4.0
+chromadb==0.5.3  # Pinned: v1.x has Windows segfault issues with Rust bindings
 sentence-transformers>=2.2.0
+onnxruntime==1.18.0  # Pinned: v1.23+ has DLL loading issues on Windows
 
 
 # Guardrails for LLM validation
@@ -23,5 +24,6 @@ guardrails-ai>=0.7.0
 
 # Speech-to-Text
 faster-whisper>=1.0.0
-numpy<2.0.0
+ctranslate2==4.4.0  # Pinned: v4.5+ causes segfaults on Windows
+numpy<2.0.0  # Required: numpy 2.x breaks sentence-transformers
 python-multipart>=0.0.6
