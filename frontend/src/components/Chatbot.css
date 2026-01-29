@@ -87,6 +87,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -137,8 +138,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Messages Container */
@@ -173,8 +181,15 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-message.user {
@@ -338,12 +353,25 @@
   animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+.typing-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
 
 @keyframes bounce {
-  0%, 80%, 100% { transform: scale(0.6); }
-  40% { transform: scale(1); }
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+  }
+
+  40% {
+    transform: scale(1);
+  }
 }
 
 /* Suggestions */
@@ -383,11 +411,61 @@
 
 /* Input Area */
 .chatbot-input {
-  padding: 16px 20px;
-  background: var(--chat-surface);
-  border-top: 1px solid var(--chat-border);
   display: flex;
-  gap: 12px;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  gap: 8px;
+  /* Added gap for buttons */
+}
+
+.mic-button {
+  background: rgba(0, 255, 255, 0.1);
+  /* Slight background for visibility */
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  color: #00ffff;
+  border-radius: 12px;
+  /* Match other buttons */
+  width: 44px;
+  /* Slightly larger */
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+
+.mic-button:hover {
+  background: rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.mic-button.recording {
+  background: rgba(255, 0, 0, 0.2);
+  border-color: #ff3333;
+  color: #ff3333;
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.7);
+  }
+
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 10px rgba(255, 51, 51, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 51, 51, 0);
+  }
 }
 
 .chatbot-input input {
@@ -499,9 +577,91 @@
     height: calc(100vh - 100px);
     border-radius: 12px;
   }
-  
+
   .chatbot-container {
     bottom: 16px;
     right: 16px;
   }
+}
+
+/* Export and Download Buttons */
+.results-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  list-style: none;
+  /* Hide default marker */
+}
+
+.results-summary::-webkit-details-marker {
+  display: none;
+  /* Hide default marker in WebKit */
+}
+
+/* Custom Marker */
+.results-summary>span::before {
+  content: '▶';
+  font-size: 10px;
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.2s ease;
+  color: var(--chat-primary);
+}
+
+details[open]>.results-summary>span::before {
+  transform: rotate(90deg);
+}
+
+.export-csv-btn {
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid var(--chat-primary);
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* Prevent the button from shrinking */
+  flex-shrink: 0;
+}
+
+.export-csv-btn:hover {
+  background: var(--chat-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.image-download-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  z-index: 10;
+}
+
+.image-container:hover .image-download-btn {
+  opacity: 1;
+}
+
+.image-download-btn:hover {
+  background: var(--chat-primary);
+  border-color: var(--chat-primary);
+  transform: scale(1.1);
 }

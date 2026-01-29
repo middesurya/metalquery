@@ -46,7 +46,30 @@ const ResultsTable = ({ results }) => {
         <div className="results-section">
             <div className="results-header">
                 <span className="results-icon">📊</span>
-                <span>Data Results ({results.length} rows)</span>
+                <span style={{ flex: 1 }}>Data Results ({results.length} rows)</span>
+                <button
+                    className="results-export-btn"
+                    onClick={() => {
+                        const headers = Object.keys(results[0]);
+                        const csvContent = [
+                            headers.join(','),
+                            ...results.map(row => headers.map(fieldName =>
+                                JSON.stringify(row[fieldName], (key, value) => value === null ? '' : value)
+                            ).join(','))
+                        ].join('\n');
+
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `results_export_${new Date().toISOString().slice(0, 10)}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }}
+                >
+                    📥 Export CSV
+                </button>
             </div>
             <div className="results-table-container">
                 <table className="results-table">
@@ -77,8 +100,10 @@ const ResultsTable = ({ results }) => {
  */
 const SQLDisplay = ({ sql }) => {
     const [copied, setCopied] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
-    const copySQL = () => {
+    const copySQL = (e) => {
+        e.stopPropagation();
         navigator.clipboard.writeText(sql);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -86,14 +111,24 @@ const SQLDisplay = ({ sql }) => {
 
     return (
         <div className="sql-section">
-            <div className="sql-header">
+            <div
+                className="sql-header"
+                onClick={() => setIsExpanded(!isExpanded)}
+                style={{ cursor: 'pointer' }}
+                title="Click to toggle SQL visibility"
+            >
+                <span className={`sql-toggle-icon ${isExpanded ? 'expanded' : ''}`}>▶</span>
                 <span className="sql-icon">🔍</span>
-                <span>Generated SQL Query</span>
-                <button className="copy-btn" onClick={copySQL}>
-                    {copied ? '✓ Copied' : '📋 Copy'}
-                </button>
+                <span style={{ flex: 1 }}>Generated SQL Query</span>
+                {isExpanded && (
+                    <button className="copy-btn" onClick={copySQL}>
+                        {copied ? '✓ Copied' : '📋 Copy'}
+                    </button>
+                )}
             </div>
-            <pre className="sql-code">{sql}</pre>
+            {isExpanded && (
+                <pre className="sql-code">{sql}</pre>
+            )}
         </div>
     );
 };
@@ -121,9 +156,25 @@ const ImageLightbox = ({ images, currentIndex, onClose, onNavigate }) => {
     return (
         <div className="lightbox-overlay" onClick={onClose}>
             <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-                <button className="lightbox-close" onClick={onClose}>
-                    &times;
-                </button>
+                <div className="lightbox-controls">
+                    <button
+                        className="lightbox-action"
+                        onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = currentImage.data || currentImage.url; // Handle both data and url props
+                            link.download = `image-download-${currentIndex + 1}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }}
+                        title="Download Image"
+                    >
+                        ⬇️
+                    </button>
+                    <button className="lightbox-close" onClick={onClose}>
+                        &times;
+                    </button>
+                </div>
 
                 {images.length > 1 && currentIndex > 0 && (
                     <button
@@ -195,7 +246,8 @@ const ImageGallery = ({ images }) => {
 
     if (!images || images.length === 0) return null;
 
-    // NLP service URL for images
+    // NLP service URL for serving static BRD images
+    // Note: Image serving is direct from NLP service (no security concern for static files)
     const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
 
     return (
@@ -216,6 +268,21 @@ const ImageGallery = ({ images }) => {
                             alt={`From ${img.source}`}
                             loading="lazy"
                         />
+                        <button
+                            className="gallery-download-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const link = document.createElement('a');
+                                link.href = `${NLP_URL}${img.url}`;
+                                link.download = `gallery-image-${idx}.png`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }}
+                            title="Download"
+                        >
+                            ⬇️
+                        </button>
                         <div className="image-caption">
                             {img.source} (p.{img.page + 1})
                         </div>
@@ -379,6 +446,92 @@ function App() {
     const [lightboxData, setLightboxData] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+
+    // ==========================================================
+    // 🎙️ VOICE RECORDING LOGIC
+    // ==========================================================
+    const [isRecording, setIsRecording] = useState(false);
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+
+    const handleMicClick = async () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                await sendAudio(audioBlob);
+
+                // Stop all tracks to release mic
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+            setInputValue("Listening... (Speak now, click mic to stop) 🎙️");
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Could not access microphone. Please check permissions.");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            setInputValue("Processing audio... ⏳");
+        }
+    };
+
+    const sendAudio = async (audioBlob) => {
+        // setInputValue("Processing audio... ⏳"); // Already set in stopRecording
+        setIsLoading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", audioBlob, "recording.webm");
+
+            // Call Django proxy endpoint (Django forwards to NLP service)
+            // This maintains the security boundary: React → Django → NLP Service
+            const response = await fetch(`${API_URL}/api/chatbot/transcribe/`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setInputValue(data.text);
+                inputRef.current?.focus();
+            } else {
+                setInputValue("");
+                alert(`Transcription failed: ${data.error}`);
+            }
+        } catch (error) {
+            console.error("Transcription error:", error);
+            setInputValue("");
+            alert("Failed to send audio for transcription.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Lightbox handlers
     const openLightbox = (images, index) => {
@@ -701,6 +854,18 @@ function App() {
                             disabled={isLoading}
                             className="chat-input"
                         />
+
+                        {/* Mic Button */}
+                        <button
+                            className={`mic-button ${isRecording ? 'recording' : ''}`}
+                            onClick={handleMicClick}
+                            disabled={isLoading}
+                            title={isRecording ? "Stop Recording" : "Speak"}
+                            type="button"
+                        >
+                            {isRecording ? '🟥' : '🎙️'}
+                        </button>
+
                         <button
                             onClick={editingMessageId ? handleSubmitEdit : () => sendMessage()}
                             disabled={!inputValue.trim() || isLoading}

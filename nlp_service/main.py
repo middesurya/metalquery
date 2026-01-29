@@ -204,6 +204,16 @@ async def startup_event():
         logger.warning(f"⚠ Visualization pipeline initialization failed: {e}")
         viz_pipeline = None
 
+    # ✅ Initialize STT Service (Lazy load on first request to speed up boot, or here)
+    # We will let it lazy load to not block startup too much, but basic import check is good.
+    try:
+        from stt_service import stt_service
+        # Pre-initialize if you want it ready immediately (optional, might take time)
+        # stt_service.initialize() 
+        logger.info("✓ STT Service registered")
+    except Exception as e:
+        logger.warning(f"⚠ STT Service registration failed: {e}")
+
     logger.info("✓ Query Guard initialized")
 
 # ============================================================
@@ -569,6 +579,59 @@ async def format_response(request: FormatResponseRequest):
         return FormatResponseResponse(
             success=False,
             error=f"Format failed: {str(e)}"
+        )
+
+
+# ============================================================
+# ✅ SPEECH-TO-TEXT ENDPOINT
+# ============================================================
+
+from fastapi import UploadFile, File
+import shutil
+import tempfile
+
+class TranscribeResponse(BaseModel):
+    success: bool
+    text: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/api/v1/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    Transcribe uploaded audio file using Faster-Whisper (CPU optimized).
+    Supports .wav, .mp3, .webm, etc.
+    """
+    try:
+        # Save upload to temporary file
+        suffix = Path(file.filename).suffix
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        
+        logger.info(f"🎤 Received audio file: {file.filename} -> {tmp_path}")
+
+        try:
+            from stt_service import stt_service
+            text = stt_service.transcribe(tmp_path)
+            
+            # Cleanup
+            os.unlink(tmp_path)
+            
+            return TranscribeResponse(
+                success=True,
+                text=text
+            )
+            
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise e
+
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return TranscribeResponse(
+            success=False,
+            error=f"Transcription failed: {str(e)}"
         )
 
 

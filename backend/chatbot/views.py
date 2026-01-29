@@ -689,6 +689,50 @@ def schema_info(request):
 
 
 # ============================================================
+# Speech-to-Text Transcribe Endpoint (Proxy)
+# ============================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def transcribe(request):
+    """
+    Proxy STT (speech-to-text) requests to NLP service.
+
+    Security: All audio transcription goes through Django to maintain
+    the security boundary (React → Django → NLP Service).
+    """
+    if 'file' not in request.FILES:
+        return JsonResponse({
+            'success': False,
+            'error': 'No audio file provided'
+        }, status=400)
+
+    audio_file = request.FILES['file']
+
+    # File size limit (10MB)
+    if audio_file.size > 10 * 1024 * 1024:
+        return JsonResponse({
+            'success': False,
+            'error': 'File too large (max 10MB)'
+        }, status=400)
+
+    try:
+        files = {'file': (audio_file.name, audio_file.read(), audio_file.content_type)}
+        nlp_response = requests.post(
+            f"{NLP_SERVICE_URL}/api/v1/transcribe",
+            files=files,
+            timeout=60
+        )
+        return JsonResponse(nlp_response.json(), status=nlp_response.status_code)
+    except requests.RequestException as e:
+        logger.error(f"Transcribe proxy error: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Transcription service unavailable'
+        }, status=503)
+
+
+# ============================================================
 # Health Check Endpoint
 # ============================================================
 

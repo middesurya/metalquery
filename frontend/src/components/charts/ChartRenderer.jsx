@@ -4,6 +4,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
 import './Charts.css';
+import { exportElementAsImage } from '../../utils/downloadHelper';
 
 // DaVinci Design System Colors
 const COLORS = {
@@ -298,6 +299,8 @@ class ChartErrorBoundary extends React.Component {
  * Renders the appropriate chart based on config type
  */
 const ChartRenderer = ({ config, data }) => {
+    const chartRef = React.useRef(null);
+
     if (!config || !config.type) {
         return null;
     }
@@ -332,13 +335,41 @@ const ChartRenderer = ({ config, data }) => {
         return null;
     }
 
+    const handleExport = () => {
+        if (chartRef.current) {
+            exportElementAsImage(chartRef.current, `chart_export_${new Date().toISOString().slice(0, 10)}.png`);
+        }
+    };
+
     return (
         <ChartErrorBoundary>
-            <div className="chart-container">
-                {config.options?.title && config.type !== 'progress_bar' && config.type !== 'kpi_card' && (
-                    <div className="chart-title">{config.options.title}</div>
-                )}
-                <ChartComponent config={config} data={arrayData} />
+            <div className="chart-wrapper" style={{ position: 'relative' }}>
+                <div className="chart-container" ref={chartRef}>
+                    {config.options?.title && config.type !== 'progress_bar' && config.type !== 'kpi_card' && (
+                        <div className="chart-title">{config.options.title}</div>
+                    )}
+                    <ChartComponent config={config} data={arrayData} />
+                </div>
+                <button
+                    className="chart-export-btn"
+                    onClick={handleExport}
+                    title="Export Chart as Image"
+                    style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '4px',
+                        color: '#fff',
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        zIndex: 10
+                    }}
+                >
+                    📷 Export
+                </button>
             </div>
         </ChartErrorBoundary>
     );
