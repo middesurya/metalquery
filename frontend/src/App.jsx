@@ -246,7 +246,8 @@ const ImageGallery = ({ images }) => {
 
     if (!images || images.length === 0) return null;
 
-    // NLP service URL for images
+    // NLP service URL for serving static BRD images
+    // Note: Image serving is direct from NLP service (no security concern for static files)
     const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
 
     return (
@@ -507,22 +508,9 @@ function App() {
             const formData = new FormData();
             formData.append("file", audioBlob, "recording.webm");
 
-            // Use API_URL defined in App.jsx
-            // Note: API_URL in App.jsx usually points to backend port 8000
-            // But STT service is part of NLP service (port 8003) or managed via Django proxy?
-            // The original plan added /api/v1/transcribe to NLP service (main.py).
-            // Main.py is running on port 8003 (default NLP port).
-            // However, typical setup proxies /api requests.
-            // Let's check config.js or assume direct call if needed. 
-            // Wait, previous Chatbot.jsx implementation used BACKEND_API_URL which was 'http://localhost:8000'.
-            // Django (8000) usually proxies to NLP (8003). 
-            // But we didn't add the proxy view in Django! We added the endpoint to NLP service (main.py).
-            // So we should call NLP service directly OR add a proxy.
-            // Direct call to NLP service (8003) is safer for now if CORS allows.
-            // Let's use hardcoded 8003 for the transcribe endpoint to be sure, or check config.
-
-            const NLP_URL = process.env.REACT_APP_NLP_URL || 'http://localhost:8003';
-            const response = await fetch(`${NLP_URL}/api/v1/transcribe`, {
+            // Call Django proxy endpoint (Django forwards to NLP service)
+            // This maintains the security boundary: React → Django → NLP Service
+            const response = await fetch(`${API_URL}/api/chatbot/transcribe/`, {
                 method: 'POST',
                 body: formData
             });

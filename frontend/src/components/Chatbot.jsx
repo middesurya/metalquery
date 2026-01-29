@@ -271,7 +271,7 @@ const Chatbot = () => {
             const formData = new FormData();
             formData.append("file", audioBlob, "recording.webm");
 
-            const response = await fetch(`${BACKEND_API_URL}/api/v1/transcribe`, {
+            const response = await fetch(`${BACKEND_API_URL}/api/chatbot/transcribe/`, {
                 method: 'POST',
                 body: formData
             });
