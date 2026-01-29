@@ -1,5 +1,52 @@
 # CHANGES.md - MetalQuery NLP-to-SQL Project
 
+## [2026-01-29] Speech-to-Text & Export Features
+
+### Overview
+Added voice input capabilities using Faster-Whisper and export features for query results and charts.
+
+### New Features
+- **Speech-to-Text**: Voice input for natural language queries using Faster-Whisper
+- **CSV Export**: Download query results as CSV files
+- **Chart Export**: Download charts as PNG images using html2canvas
+- **Gallery Export**: Download images from BRD RAG results
+- **Collapsible SQL**: SQL query section is now collapsible for cleaner UI
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `nlp_service/stt_service.py` | Faster-Whisper STT service class |
+| `frontend/src/utils/downloadHelper.js` | Export utilities (CSV, PNG, images) |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `nlp_service/main.py` | Added `/api/v1/transcribe` endpoint, STT service initialization |
+| `nlp_service/requirements.txt` | Added faster-whisper, ctranslate2, python-multipart |
+| `backend/chatbot/views.py` | Added Django proxy endpoint for STT |
+| `backend/chatbot/urls.py` | Added transcribe route |
+| `frontend/src/App.jsx` | Added voice recording UI, export buttons |
+| `frontend/src/components/Chatbot.jsx` | Added voice recording, download buttons |
+| `frontend/src/components/charts/ChartRenderer.jsx` | Added chart export functionality |
+| `frontend/package.json` | Added html2canvas dependency |
+
+### Dependency Pinning (Windows Compatibility)
+
+| Package | Version | Issue Fixed |
+|---------|---------|-------------|
+| `chromadb` | 0.5.3 | Rust bindings segfault in v1.x |
+| `ctranslate2` | 4.4.0 | Segfaults with faster-whisper in v4.5+ |
+| `onnxruntime` | 1.18.0 | DLL loading issues in v1.23+ |
+| `numpy` | <2.0.0 | Breaks sentence-transformers |
+
+### Security
+- Audio transcription routed through Django proxy to maintain security boundary
+- React → Django → NLP Service architecture preserved
+
+---
+
 ## [2026-01-09] Infographics/Charts Implementation
 
 ### Overview

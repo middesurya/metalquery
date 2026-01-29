@@ -184,6 +184,18 @@
   | Progress Bar | Single OEE/yield percentage |
   | KPI Card | Single count/total value |
 
+### Speech-to-Text (NEW)
+- Voice input for natural language queries
+- Faster-Whisper with CTranslate2 backend
+- Local processing (no cloud API required)
+- Microphone button in chat interface
+
+### Export & Download (NEW)
+- Export query results as CSV
+- Download charts as PNG images
+- Export gallery images
+- Collapsible SQL query display
+
 ### Multimodal BRD RAG
 - 33 PDF documents indexed
 - 389 extracted images (screenshots, diagrams)
@@ -277,6 +289,7 @@ npm start
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/chatbot/chat/` | POST | Bearer token | Main chat endpoint |
+| `/api/chatbot/transcribe/` | POST | - | Speech-to-text proxy |
 | `/api/chatbot/schema/` | GET | - | Database schema |
 | `/api/chatbot/health/` | GET | - | Health check |
 
@@ -285,6 +298,7 @@ npm start
 |----------|--------|-------------|
 | `/api/v1/chat` | POST | Hybrid chat (SQL + BRD) |
 | `/api/v1/generate-sql` | POST | SQL generation only |
+| `/api/v1/transcribe` | POST | Audio transcription (Faster-Whisper) |
 | `/health` | GET | Health check |
 
 ---
@@ -307,6 +321,7 @@ poc_nlp_tosql/
 │   ├── prompts_v2.py         # Schema filtering + LLM prompts
 │   ├── query_router.py       # SQL vs BRD routing
 │   ├── brd_rag.py            # Document retrieval
+│   ├── stt_service.py        # Speech-to-text (Faster-Whisper)
 │   ├── visualization/        # LIDA-inspired chart generation
 │   │   ├── viz_summarizer.py # Column classification
 │   │   ├── viz_goal_finder.py # Chart type detection
@@ -315,8 +330,10 @@ poc_nlp_tosql/
 │
 ├── frontend/                  # React SPA
 │   └── src/
-│       ├── App.jsx           # Chat UI + auth handling
+│       ├── App.jsx           # Chat UI + auth + voice recording
 │       ├── config.js         # API configuration
+│       ├── utils/
+│       │   └── downloadHelper.js # Export utilities (CSV, PNG)
 │       └── components/
 │           └── ChartRenderer.jsx # Dynamic Recharts rendering
 │
@@ -382,6 +399,9 @@ python test_sql_injection.py   # SQL injection tests (43 cases)
 | Pie chart (distribution) | ✅ |
 | Progress Bar (single OEE) | ✅ |
 | KPI Card (single value) | ✅ |
+| Speech-to-text (voice input) | ✅ |
+| CSV export | ✅ |
+| Chart PNG download | ✅ |
 
 ---
 
@@ -391,12 +411,14 @@ MIT License
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-29
 
 ### Recent Changes
+- **2026-01-29**: Added Speech-to-Text with Faster-Whisper (voice input for queries)
+- **2026-01-29**: Added export features (CSV export, chart PNG download, gallery export)
+- **2026-01-29**: Added Django proxy for transcription endpoint (security boundary)
+- **2026-01-29**: Pinned dependencies for Windows compatibility (chromadb, ctranslate2, onnxruntime)
 - **2026-01-09**: Added infographics/charts (bar, line, pie, progress bar, KPI card)
 - **2026-01-09**: Fixed SQL guardrails (comment stripping, REPLACE keyword)
-- **2026-01-09**: Fixed column classification (METRIC_TIME_PATTERNS)
 - **2026-01-06**: Added RBAC table-level access control
-- **2026-01-06**: Added comprehensive RBAC documentation
 - All security tests passing (43 SQL injection tests, 16 RBAC tests)

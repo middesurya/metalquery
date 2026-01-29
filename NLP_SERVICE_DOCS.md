@@ -59,6 +59,7 @@ metalquery/
 │   ├── prompts_v2.py         # Schema-aware prompts (29 tables)
 │   ├── query_router.py       # Routes questions to SQL or BRD
 │   ├── brd_rag.py            # BRD document retrieval
+│   ├── stt_service.py        # Speech-to-text (Faster-Whisper)
 │   ├── guardrails.py         # SQL validation with comment stripping
 │   ├── sql_guardrails.py     # SQL guardrails with table allowlist
 │   ├── security/             # Security modules
@@ -300,6 +301,7 @@ The system automatically routes questions to:
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/chatbot/chat/` | POST | Bearer token | Main chat endpoint |
+| `/api/chatbot/transcribe/` | POST | - | Speech-to-text proxy |
 | `/api/chatbot/schema/` | GET | - | Get database schema |
 | `/api/chatbot/health/` | GET | - | Health check |
 
@@ -311,6 +313,7 @@ The system automatically routes questions to:
 | `/api/v1/generate-sql` | POST | SQL generation only |
 | `/api/v1/generate-chart-config` | POST | Chart config generation (Recharts) |
 | `/api/v1/format-response` | POST | Format results as text |
+| `/api/v1/transcribe` | POST | Speech-to-text (Faster-Whisper) |
 | `/api/v1/brd-debug` | GET | BRD RAG debug info |
 | `/api/brd-images/{file}` | GET | Serve extracted images |
 | `/health` | GET | Health check |
@@ -405,4 +408,4 @@ python main.py
 
 ---
 
-**Last Updated:** 2026-01-09
+**Last Updated:** 2026-01-29

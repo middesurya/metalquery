@@ -22,6 +22,8 @@
 | NL-to-SQL | Convert questions to PostgreSQL queries |
 | BRD RAG | Answer questions from PDF documents |
 | Hybrid Routing | Auto-detect SQL vs BRD questions |
+| Speech-to-Text | Voice input with Faster-Whisper |
+| Export Features | CSV export, chart PNG download |
 | RBAC | Table-level access control |
 | Security | 12-layer defense system |
 
@@ -665,9 +667,9 @@ Pre-configured templates for common manufacturing metrics:
 
 | Component | Responsibility | Database Access |
 |-----------|---------------|-----------------|
-| React Frontend | User interface, auth token, chart rendering | None |
-| Django Backend | Security, RBAC, DB access, chart config passthrough | Yes (Owner) |
-| NLP Service | SQL generation, schema filtering, chart config | None |
+| React Frontend | User interface, auth token, chart rendering, voice input, export | None |
+| Django Backend | Security, RBAC, DB access, chart config passthrough, STT proxy | Yes (Owner) |
+| NLP Service | SQL generation, schema filtering, chart config, STT | None |
 | Groq LLM | Natural language processing | None |
 | PostgreSQL | Data storage | N/A (is the DB) |
 
@@ -675,4 +677,4 @@ Pre-configured templates for common manufacturing metrics:
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-29
